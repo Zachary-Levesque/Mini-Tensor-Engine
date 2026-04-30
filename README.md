@@ -55,8 +55,11 @@ python3 ui/server.py
 
 Then open `http://127.0.0.1:8000` in your browser.
 
-The dashboard shows:
+The dashboard opens with a simple project summary first, then lets the user move into an interactive playground.
 
+The UI shows:
+
+- a plain-language explanation of the project goal and why it matters
 - model architecture and tensor views
 - layer-by-layer inference flow
 - Python-reference validation status
