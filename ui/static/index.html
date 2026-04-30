@@ -95,6 +95,40 @@
           </div>
           <button id="open-playground" class="button large">Try It Out</button>
         </section>
+
+        <section class="walkthrough-panel">
+          <div>
+            <p class="panel-kicker">Recommended Order</p>
+            <h2>How should you walk through this project?</h2>
+          </div>
+          <div class="walkthrough-grid">
+            <article class="walkthrough-step">
+              <span class="step-number">1</span>
+              <h3>Choose a sample model</h3>
+              <p>Pick an example first so you know which architecture and tensors you are looking at.</p>
+            </article>
+            <article class="walkthrough-step">
+              <span class="step-number">2</span>
+              <h3>Read the flow</h3>
+              <p>Use the layer sequence to understand the model before looking at raw numbers.</p>
+            </article>
+            <article class="walkthrough-step">
+              <span class="step-number">3</span>
+              <h3>Verify correctness</h3>
+              <p>Make sure the C++ output matches Python. Performance only matters after this passes.</p>
+            </article>
+            <article class="walkthrough-step">
+              <span class="step-number">4</span>
+              <h3>Inspect tensors</h3>
+              <p>Follow how the values change through the network to see what each layer is doing.</p>
+            </article>
+            <article class="walkthrough-step">
+              <span class="step-number">5</span>
+              <h3>Study performance last</h3>
+              <p>Compare backends and thread counts only after you understand the model behavior.</p>
+            </article>
+          </div>
+        </section>
       </section>
 
       <main class="playground hidden" id="playground">
@@ -117,6 +151,20 @@
         </section>
 
         <div class="dashboard-grid">
+          <section class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Guide</p>
+                <h2>Walkthrough</h2>
+                <p class="panel-copy">
+                  Use this recommended order if you want the shortest path to understanding the
+                  project and demoing it clearly.
+                </p>
+              </div>
+            </div>
+            <div id="playground-walkthrough" class="walkthrough-inline"></div>
+          </section>
+
           <section class="panel panel-wide">
             <div class="panel-header">
               <div>
@@ -304,6 +352,7 @@
                 faster by itself?"</em>
               </p>
             </div>
+            <div id="matmul-insights" class="insight-strip"></div>
             <div id="matmul-chart" class="chart-grid"></div>
           </section>
 
@@ -340,6 +389,7 @@
                 faster?"</em>
               </p>
             </div>
+            <div id="model-insights" class="insight-strip"></div>
             <div id="model-chart" class="chart-grid"></div>
           </section>
         </div>

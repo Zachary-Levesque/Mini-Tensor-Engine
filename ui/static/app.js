@@ -5,6 +5,29 @@ const state = {
   benchmarks: null,
 };
 
+const walkthroughSteps = [
+  {
+    title: "Choose a sample model",
+    detail: "Start with the model selector so you know which manifest, tensors, and outputs the page is showing.",
+  },
+  {
+    title: "Read the inference flow",
+    detail: "Look at the layer sequence before inspecting numbers. This tells you what mathematical path the input follows.",
+  },
+  {
+    title: "Confirm correctness",
+    detail: "Check that the C++ engine matches the Python reference output. This is the quality gate for the entire project.",
+  },
+  {
+    title: "Inspect tensors",
+    detail: "Move through the activation tensors in order and see how the data changes after each layer.",
+  },
+  {
+    title: "Compare performance",
+    detail: "Use the benchmark results last to explain which backend is fastest and when threading helps.",
+  },
+];
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -55,6 +78,22 @@ function renderExampleSelectors() {
 
   document.getElementById("playground-example-title").textContent = example.title;
   document.getElementById("playground-example-text").textContent = example.summary;
+}
+
+function renderWalkthrough() {
+  const markup = walkthroughSteps
+    .map(
+      (step, index) => `
+        <article class="walkthrough-step">
+          <span class="step-number">${index + 1}</span>
+          <h3>${step.title}</h3>
+          <p>${step.detail}</p>
+        </article>
+      `
+    )
+    .join("");
+
+  document.getElementById("playground-walkthrough").innerHTML = markup;
 }
 
 function renderMetrics() {
@@ -211,6 +250,88 @@ function renderBenchmarks() {
       return `This measures full inference for ${groupName}. Batch size ${sample.batch}, input width ${sample.input}, hidden width ${sample.hidden}, output width ${sample.output}. This is usually the most important performance view because it times the whole model, not just one isolated kernel.`;
     }
   );
+
+  renderBenchmarkInsights();
+}
+
+function bestResultByCase(results) {
+  const grouped = new Map();
+  for (const result of results) {
+    const best = grouped.get(result.case);
+    if (!best || result.avg_ns < best.avg_ns) {
+      grouped.set(result.case, result);
+    }
+  }
+  return Array.from(grouped.values());
+}
+
+function renderInsightCards(containerId, items) {
+  const container = document.getElementById(containerId);
+  if (!items.length) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <article class="insight-card">
+          <p class="insight-label">${item.label}</p>
+          <h3>${item.title}</h3>
+          <p>${item.text}</p>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderBenchmarkInsights() {
+  const matmulResults = state.benchmarks?.matmul_results || [];
+  const modelResults = state.benchmarks?.model_results || [];
+
+  const bestMatmul = bestResultByCase(matmulResults);
+  const bestModel = bestResultByCase(modelResults);
+
+  const matmulInsights = [];
+  if (bestMatmul.length) {
+    const largestCase = [...bestMatmul].sort((lhs, rhs) => lhs.case.localeCompare(rhs.case)).at(-1);
+    if (largestCase) {
+      matmulInsights.push({
+        label: "Main takeaway",
+        title: `${largestCase.case} is fastest with ${largestCase.backend}${largestCase.threads > 1 ? ` at ${largestCase.threads} threads` : ""}`,
+        text: "On the largest raw matrix multiply, the winning backend shows which implementation handles heavy numerical work best on this machine.",
+      });
+    }
+    const threadedWins = bestMatmul.filter((result) => result.backend === "threaded_transpose_rhs").length;
+    matmulInsights.push({
+      label: "Pattern",
+      title: `${threadedWins} of ${bestMatmul.length} raw matmul cases are won by the threaded backend`,
+      text: "This helps you explain whether parallel work is paying off in the low-level kernel, before looking at full model inference.",
+    });
+  }
+
+  const modelInsights = [];
+  if (bestModel.length) {
+    const tinyCase = bestModel.find((result) => result.case === "tiny_demo");
+    if (tinyCase) {
+      modelInsights.push({
+        label: "Small workload lesson",
+        title: `${tinyCase.backend}${tinyCase.threads > 1 ? ` at ${tinyCase.threads} threads` : ""} is best for tiny_demo`,
+        text: "Small models often gain little from extra threads because thread-management overhead can cancel out the benefit.",
+      });
+    }
+    const largestModelCase = [...bestModel].sort((lhs, rhs) => lhs.batch - rhs.batch).at(-1);
+    if (largestModelCase) {
+      modelInsights.push({
+        label: "Large workload lesson",
+        title: `${largestModelCase.case} is fastest with ${largestModelCase.backend}${largestModelCase.threads > 1 ? ` at ${largestModelCase.threads} threads` : ""}`,
+        text: "This is the clearest end-to-end proof of which implementation helps real inference workloads the most.",
+      });
+    }
+  }
+
+  renderInsightCards("matmul-insights", matmulInsights);
+  renderInsightCards("model-insights", modelInsights);
 }
 
 function setConsole(id, text) {
@@ -231,6 +352,7 @@ function showSummary() {
 
 function renderAll() {
   renderExampleSelectors();
+  renderWalkthrough();
   renderMetrics();
   renderArchitecture();
   renderTensors();

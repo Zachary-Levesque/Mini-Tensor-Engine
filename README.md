@@ -62,11 +62,12 @@ The UI shows:
 
 - a plain-language explanation of the project goal and why it matters
 - multiple sample models you can switch between
+- a guided walkthrough for how to read and demo the project
 - model architecture and tensor views
 - layer-by-layer inference flow
 - Python-reference validation status
 - inference execution controls for different backends and thread counts
-- benchmark controls and visual summaries
+- benchmark controls, visual summaries, and auto-generated performance takeaways
 
 The UI reads the existing reference tensors and latest benchmark JSON output, and it can also trigger fresh inference and benchmark runs locally.
 

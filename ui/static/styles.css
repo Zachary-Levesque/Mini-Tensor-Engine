@@ -91,6 +91,7 @@ h2 {
 .metric-card,
 .summary-card,
 .guide-panel,
+.walkthrough-panel,
 .panel,
 .playground-banner {
   background: rgba(255, 250, 243, 0.9);
@@ -128,6 +129,7 @@ h2 {
 
 .summary-card,
 .guide-panel,
+.walkthrough-panel,
 .playground-banner,
 .panel {
   border-radius: 26px;
@@ -165,6 +167,51 @@ h2 {
   justify-content: space-between;
   align-items: end;
   gap: 24px;
+}
+
+.walkthrough-panel {
+  margin-top: 18px;
+}
+
+.walkthrough-grid,
+.walkthrough-inline,
+.insight-strip {
+  display: grid;
+  gap: 14px;
+}
+
+.walkthrough-grid,
+.walkthrough-inline {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.walkthrough-step,
+.insight-card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+}
+
+.walkthrough-step p,
+.insight-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.step-number,
+.insight-label {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(180, 82, 56, 0.12);
+  color: var(--accent-deep);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .button {
@@ -356,6 +403,11 @@ select {
   font-size: 0.9rem;
 }
 
+.insight-strip {
+  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
 .chart-bars {
   display: grid;
   gap: 10px;
@@ -418,6 +470,7 @@ select {
 
   .summary-card,
   .guide-panel,
+  .walkthrough-panel,
   .playground-banner,
   .panel {
     padding: 18px;
