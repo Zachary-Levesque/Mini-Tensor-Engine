@@ -62,6 +62,14 @@ def main() -> None:
     write_tensor(REFERENCE_DIR / "w2.txt", w2)
     write_tensor(REFERENCE_DIR / "b2.txt", b2)
     write_tensor(REFERENCE_DIR / "output.txt", output)
+    (REFERENCE_DIR / "model.txt").write_text(
+        "# Sequential feedforward model definition\n"
+        "linear w1.txt b1.txt\n"
+        "relu\n"
+        "linear w2.txt b2.txt\n"
+        "softmax\n",
+        encoding="utf-8",
+    )
 
     print("Reference tensors written to", REFERENCE_DIR)
 
