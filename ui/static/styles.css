@@ -146,7 +146,16 @@ h2 {
   padding-left: 18px;
 }
 
+.explain-steps {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+
 .summary-list li + li {
+  margin-top: 8px;
+}
+
+.explain-steps li + li {
   margin-top: 8px;
 }
 
@@ -204,6 +213,25 @@ h2 {
 .panel-copy {
   margin: 10px 0 0;
   max-width: 68ch;
+}
+
+.explain-block {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid var(--line);
+}
+
+.explain-block h3 {
+  font-size: 1.05rem;
+  margin-bottom: 8px;
+}
+
+.explain-block p {
+  margin: 0 0 12px;
+  line-height: 1.65;
+  color: var(--muted);
 }
 
 .control-stack {
