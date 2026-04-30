@@ -21,6 +21,14 @@ struct MatMulCase {
     std::size_t cols;
 };
 
+struct ModelCase {
+    const char* name;
+    std::size_t batch_size;
+    std::size_t input_width;
+    std::size_t hidden_width;
+    std::size_t output_width;
+};
+
 struct Options {
     std::size_t iterations = 200;
     std::size_t warmup_iterations = 20;
@@ -177,78 +185,117 @@ void RunMatMulBenchmarks(const Options& options) {
     }
 }
 
+struct ModelData {
+    mte::Tensor input;
+    mte::Tensor w1;
+    mte::Tensor b1;
+    mte::Tensor w2;
+    mte::Tensor b2;
+};
+
+struct ModelBundle {
+    mte::Tensor input;
+    mte::TwoLayerPerceptron model;
+};
+
+ModelData MakeSyntheticModelData(const ModelCase& model_case, std::mt19937& generator) {
+    return ModelData{
+        mte::Tensor(
+            {model_case.batch_size, model_case.input_width},
+            GenerateValues(model_case.batch_size * model_case.input_width, generator)),
+        mte::Tensor(
+            {model_case.input_width, model_case.hidden_width},
+            GenerateValues(model_case.input_width * model_case.hidden_width, generator)),
+        mte::Tensor(
+            {1, model_case.hidden_width},
+            GenerateValues(model_case.hidden_width, generator)),
+        mte::Tensor(
+            {model_case.hidden_width, model_case.output_width},
+            GenerateValues(model_case.hidden_width * model_case.output_width, generator)),
+        mte::Tensor(
+            {1, model_case.output_width},
+            GenerateValues(model_case.output_width, generator)),
+    };
+}
+
+ModelBundle MakeSyntheticModel(
+    const ModelData& model_data,
+    mte::MatMulBackend backend,
+    std::size_t num_threads) {
+    return ModelBundle{
+        model_data.input,
+        mte::TwoLayerPerceptron(
+            model_data.w1,
+            model_data.b1,
+            model_data.w2,
+            model_data.b2,
+            backend,
+            num_threads),
+    };
+}
+
 void RunModelBenchmark(const Options& options) {
-    const mte::TwoLayerPerceptron naive_model(
-        mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
-                             0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
-                             -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
-                             0.9F, -0.1F, 0.5F, 0.2F, -0.7F}),
-        mte::Tensor({1, 5}, {0.1F, -0.2F, 0.05F, 0.3F, -0.4F}),
-        mte::Tensor({5, 3}, {0.3F, -0.1F, 0.8F,
-                             -0.6F, 0.4F, 0.2F,
-                             0.5F, 0.7F, -0.3F,
-                             0.1F, -0.5F, 0.9F,
-                             -0.2F, 0.6F, 0.4F}),
-        mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
-        mte::MatMulBackend::kNaive);
+    const std::vector<ModelCase> cases = {
+        {"tiny_demo", 1, 4, 5, 3},
+        {"batch32_hidden128", 32, 128, 128, 32},
+        {"batch64_hidden256", 64, 256, 256, 64},
+        {"batch128_hidden512", 128, 512, 512, 128},
+    };
 
-    const mte::TwoLayerPerceptron optimized_model(
-        mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
-                             0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
-                             -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
-                             0.9F, -0.1F, 0.5F, 0.2F, -0.7F}),
-        mte::Tensor({1, 5}, {0.1F, -0.2F, 0.05F, 0.3F, -0.4F}),
-        mte::Tensor({5, 3}, {0.3F, -0.1F, 0.8F,
-                             -0.6F, 0.4F, 0.2F,
-                             0.5F, 0.7F, -0.3F,
-                             0.1F, -0.5F, 0.9F,
-                             -0.2F, 0.6F, 0.4F}),
-        mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
-        mte::MatMulBackend::kTransposeRhs);
-
-    std::vector<mte::TwoLayerPerceptron> models;
-    models.push_back(naive_model);
-    models.push_back(optimized_model);
-    for (std::size_t num_threads : options.thread_counts) {
-        models.emplace_back(
-            mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
-                                 0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
-                                 -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
-                                 0.9F, -0.1F, 0.5F, 0.2F, -0.7F}),
-            mte::Tensor({1, 5}, {0.1F, -0.2F, 0.05F, 0.3F, -0.4F}),
-            mte::Tensor({5, 3}, {0.3F, -0.1F, 0.8F,
-                                 -0.6F, 0.4F, 0.2F,
-                                 0.5F, 0.7F, -0.3F,
-                                 0.1F, -0.5F, 0.9F,
-                                 -0.2F, 0.6F, 0.4F}),
-            mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
-            mte::MatMulBackend::kThreadedTransposeRhs,
-            num_threads);
-    }
-
-    const mte::Tensor input({1, 4}, {1.0F, -2.0F, 3.0F, 0.5F});
-    const mte::Tensor baseline_output = naive_model.Forward(input);
-    for (const mte::TwoLayerPerceptron& model : models) {
-        ValidateEquivalent(baseline_output, model.Forward(input));
-    }
-
+    std::mt19937 generator(17);
     std::cout << "Model backend comparison\n";
-    std::cout << "backend,threads,avg_ns\n";
+    std::cout << "case,batch,input,hidden,output,backend,threads,avg_ns\n";
 
-    volatile float sink = 0.0F;
-    for (const mte::TwoLayerPerceptron& model : models) {
-        const double avg_ns = MeasureAverageNanoseconds(
-            [&]() {
-                const mte::Tensor output = model.Forward(input);
-                sink += output.data()[0];
-            },
-            options.warmup_iterations,
-            options.iterations);
+    for (const ModelCase& model_case : cases) {
+        const ModelData model_data = MakeSyntheticModelData(model_case, generator);
+        ModelBundle naive_bundle =
+            MakeSyntheticModel(model_data, mte::MatMulBackend::kNaive, 1);
+        ModelBundle optimized_bundle =
+            MakeSyntheticModel(model_data, mte::MatMulBackend::kTransposeRhs, 1);
 
-        std::cout << mte::MatMulBackendName(model.backend()) << ',' << model.num_threads()
-                  << ',' << std::fixed << std::setprecision(2) << avg_ns << '\n';
+        std::vector<ModelBundle> threaded_bundles;
+        threaded_bundles.reserve(options.thread_counts.size());
+        for (std::size_t num_threads : options.thread_counts) {
+            threaded_bundles.push_back(
+                MakeSyntheticModel(
+                    model_data,
+                    mte::MatMulBackend::kThreadedTransposeRhs,
+                    num_threads));
+        }
+
+        const mte::Tensor baseline_output = naive_bundle.model.Forward(naive_bundle.input);
+        ValidateEquivalent(baseline_output, optimized_bundle.model.Forward(optimized_bundle.input));
+        for (const ModelBundle& threaded_bundle : threaded_bundles) {
+            ValidateEquivalent(baseline_output, threaded_bundle.model.Forward(threaded_bundle.input));
+        }
+
+        volatile float sink = 0.0F;
+
+        const auto report_result = [&](const ModelBundle& bundle) {
+            const double avg_ns = MeasureAverageNanoseconds(
+                [&]() {
+                    const mte::Tensor output = bundle.model.Forward(bundle.input);
+                    sink += output.data()[0];
+                },
+                options.warmup_iterations,
+                options.iterations);
+
+            std::cout << model_case.name << ',' << model_case.batch_size << ','
+                      << model_case.input_width << ',' << model_case.hidden_width << ','
+                      << model_case.output_width << ','
+                      << mte::MatMulBackendName(bundle.model.backend()) << ','
+                      << bundle.model.num_threads() << ',' << std::fixed << std::setprecision(2)
+                      << avg_ns << '\n';
+        };
+
+        report_result(naive_bundle);
+        report_result(optimized_bundle);
+        for (const ModelBundle& threaded_bundle : threaded_bundles) {
+            report_result(threaded_bundle);
+        }
+
+        std::cout << "model_sink," << sink << '\n';
     }
-    std::cout << "model_sink," << sink << '\n';
 }
 
 }  // namespace
