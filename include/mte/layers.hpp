@@ -17,6 +17,8 @@ Tensor Linear(
     MatMulBackend backend,
     std::size_t num_threads);
 Tensor ReLU(const Tensor& input);
+Tensor Sigmoid(const Tensor& input);
+Tensor Tanh(const Tensor& input);
 Tensor Softmax(const Tensor& input);
 
 }  // namespace mte
