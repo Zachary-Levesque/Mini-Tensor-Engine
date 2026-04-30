@@ -19,6 +19,19 @@ void Expect(bool condition, const char* message) {
     }
 }
 
+void ExpectTensorClose(
+    const mte::Tensor& lhs,
+    const mte::Tensor& rhs,
+    float tolerance,
+    const char* message) {
+    Expect(mte::HasSameShape(lhs, rhs), message);
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        if (!AlmostEqual(lhs.data()[i], rhs.data()[i], tolerance)) {
+            throw std::runtime_error(message);
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -35,8 +48,8 @@ int main() {
         Expect(AlmostEqual(product.at(0, 1), 64.0F), "matmul value mismatch (0,1)");
         Expect(AlmostEqual(product.at(1, 0), 139.0F), "matmul value mismatch (1,0)");
         Expect(AlmostEqual(product.at(1, 1), 154.0F), "matmul value mismatch (1,1)");
-        Expect(AlmostEqual(product.at(1, 1), optimized_product.at(1, 1)), "backend mismatch");
-        Expect(AlmostEqual(product.at(1, 1), threaded_product.at(1, 1)), "threaded backend mismatch");
+        ExpectTensorClose(product, optimized_product, 1e-6F, "backend mismatch");
+        ExpectTensorClose(product, threaded_product, 1e-6F, "threaded backend mismatch");
 
         mte::Tensor relu_input({1, 4}, {-1.0F, 0.0F, 2.5F, -3.0F});
         mte::Tensor relu_output = mte::ReLU(relu_input);
@@ -101,8 +114,8 @@ int main() {
         Expect(AlmostEqual(output.at(0, 0), 0.405884F, 1e-4F), "model mismatch at 0");
         Expect(AlmostEqual(output.at(0, 1), 0.466877F, 1e-4F), "model mismatch at 1");
         Expect(AlmostEqual(output.at(0, 2), 0.127239F, 1e-4F), "model mismatch at 2");
-        Expect(AlmostEqual(output.at(0, 2), optimized_output.at(0, 2), 1e-6F), "model backend mismatch");
-        Expect(AlmostEqual(output.at(0, 2), threaded_output.at(0, 2), 1e-6F), "threaded model mismatch");
+        ExpectTensorClose(output, optimized_output, 1e-6F, "model backend mismatch");
+        ExpectTensorClose(output, threaded_output, 1e-6F, "threaded model mismatch");
 
         const std::filesystem::path scratch_dir = "build/test_output";
         mte::SaveTensorToTextFile(output, scratch_dir / "roundtrip.txt");
