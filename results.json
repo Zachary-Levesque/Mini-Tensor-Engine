@@ -1,0 +1,20 @@
+{
+  "iterations": 1,
+  "warmup_iterations": 0,
+  "matmul_results": [
+    {"case": "32x64x32", "backend": "naive", "threads": 1, "avg_ns": 2031417.00},
+    {"case": "32x64x32", "backend": "transpose_rhs", "threads": 1, "avg_ns": 488250.00},
+    {"case": "32x64x32", "backend": "threaded_transpose_rhs", "threads": 1, "avg_ns": 486959.00},
+    {"case": "64x64x64", "backend": "naive", "threads": 1, "avg_ns": 8061166.00},
+    {"case": "64x64x64", "backend": "transpose_rhs", "threads": 1, "avg_ns": 1729833.00},
+    {"case": "64x64x64", "backend": "threaded_transpose_rhs", "threads": 1, "avg_ns": 1722292.00},
+    {"case": "128x128x128", "backend": "naive", "threads": 1, "avg_ns": 63903250.00},
+    {"case": "128x128x128", "backend": "transpose_rhs", "threads": 1, "avg_ns": 12811459.00},
+    {"case": "128x128x128", "backend": "threaded_transpose_rhs", "threads": 1, "avg_ns": 12770167.00},
+    {"case": "256x256x256", "backend": "naive", "threads": 1, "avg_ns": 513156916.00},
+    {"case": "256x256x256", "backend": "transpose_rhs", "threads": 1, "avg_ns": 98634500.00},
+    {"case": "256x256x256", "backend": "threaded_transpose_rhs", "threads": 1, "avg_ns": 98719000.00}
+  ],
+  "model_results": [
+  ]
+}
