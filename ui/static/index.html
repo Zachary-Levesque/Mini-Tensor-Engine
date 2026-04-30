@@ -8,111 +8,220 @@
   </head>
   <body>
     <div class="page-shell">
-      <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Local Demo UI</p>
-          <h1>Mini Tensor Engine</h1>
-          <p class="hero-text">
-            A clean interface for inspecting the model, tracing inference, validating output, and
-            viewing benchmark results from the C++ engine.
-          </p>
+      <section class="intro-shell" id="intro-shell">
+        <header class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Project Summary</p>
+            <h1>Mini Tensor Engine</h1>
+            <p class="hero-text">
+              This project is a custom C++ machine learning inference engine built from scratch.
+              It runs a neural network, checks that the C++ output matches Python, and compares
+              different matrix multiplication implementations to study performance.
+            </p>
+          </div>
+          <div class="hero-metrics" id="hero-metrics"></div>
+        </header>
+
+        <section class="summary-grid">
+          <article class="summary-card">
+            <p class="panel-kicker">Goal</p>
+            <h2>What is this project trying to prove?</h2>
+            <p>
+              The goal is to show how machine learning inference works at a low level. Instead of
+              using a large framework to hide the details, this project implements tensors, matrix
+              multiplication, neural-network layers, validation, and benchmarking directly in C++.
+            </p>
+          </article>
+
+          <article class="summary-card">
+            <p class="panel-kicker">Why it matters</p>
+            <h2>Why is this relevant?</h2>
+            <p>
+              This is both a systems project and an ML infrastructure project. It demonstrates
+              memory layout thinking, CPU performance work, correctness checking, and clean
+              engineering design. It is useful for understanding how real inference runtimes are
+              built.
+            </p>
+          </article>
+
+          <article class="summary-card">
+            <p class="panel-kicker">Current Engine</p>
+            <h2>What does it do right now?</h2>
+            <ul class="summary-list">
+              <li>Runs a small neural network using `Linear -> ReLU -> Linear -> Softmax`</li>
+              <li>Checks that C++ output matches a Python reference output</li>
+              <li>Supports naive, cache-friendlier, and multithreaded matmul backends</li>
+              <li>Benchmarks both raw kernels and end-to-end inference workloads</li>
+            </ul>
+          </article>
+
+          <article class="summary-card">
+            <p class="panel-kicker">What you can do here</p>
+            <h2>How to use this UI</h2>
+            <ul class="summary-list">
+              <li>See the model architecture and important tensors</li>
+              <li>Run the engine with different backends and thread counts</li>
+              <li>Refresh the Python reference data</li>
+              <li>Run benchmarks and compare performance visually</li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="guide-panel">
+          <div>
+            <p class="panel-kicker">Simple Explanation</p>
+            <h2>How should you think about this project?</h2>
+            <p class="guide-text">
+              A neural network takes numbers in, does several math operations using learned
+              weights, and produces numbers out. This engine is the software that performs that
+              math. The important idea is that the exact same model can run at very different
+              speeds depending on how tensors are stored and how matrix multiplication is
+              implemented.
+            </p>
+          </div>
+          <button id="open-playground" class="button large">Try It Out</button>
+        </section>
+      </section>
+
+      <main class="playground hidden" id="playground">
+        <section class="playground-banner">
+          <div>
+            <p class="eyebrow">Interactive Playground</p>
+            <h2>Test the engine and inspect what it is doing</h2>
+            <p class="muted">
+              Each section below explains what it shows, why it matters, and how to read the
+              output. If you ever feel lost, come back to the top summary and then return here.
+            </p>
+          </div>
+          <button id="back-to-summary" class="button subtle">Back To Summary</button>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Model</p>
+                <h2>Inference Flow</h2>
+                <p class="panel-copy">
+                  This shows the sequence of operations in the current neural network. Read it from
+                  left to right: input enters the model, two linear layers perform learned
+                  transformations, `ReLU` adds nonlinearity, and `Softmax` produces the final
+                  output probabilities.
+                </p>
+              </div>
+              <button id="refresh-reference" class="button subtle">Refresh Reference Data</button>
+            </div>
+            <div id="architecture-flow" class="flow-strip"></div>
+            <div id="validation-card" class="validation-card"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Run</p>
+                <h2>Inference Check</h2>
+                <p class="panel-copy">
+                  Use this to run the C++ engine yourself. `Backend` chooses which matrix
+                  multiplication implementation is used. `Threads` matters only for the threaded
+                  backend. The console will show the exact program output.
+                </p>
+              </div>
+            </div>
+            <form id="inference-form" class="control-stack">
+              <label>
+                <span>Backend</span>
+                <select name="backend">
+                  <option value="naive">naive</option>
+                  <option value="transpose_rhs">transpose_rhs</option>
+                  <option value="threaded_transpose_rhs" selected>threaded_transpose_rhs</option>
+                </select>
+              </label>
+              <label>
+                <span>Threads</span>
+                <input type="number" name="threads" min="1" value="4" />
+              </label>
+              <button type="submit" class="button">Run Inference</button>
+            </form>
+            <pre id="inference-output" class="console"></pre>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Run</p>
+                <h2>Benchmark Runner</h2>
+                <p class="panel-copy">
+                  Use this to measure performance. `Iterations` controls how many times a workload
+                  is timed. `Warmup` runs the workload first without counting it. `Threads`
+                  controls which thread counts are tested for the threaded backend.
+                </p>
+              </div>
+            </div>
+            <form id="benchmark-form" class="control-stack">
+              <label>
+                <span>Iterations</span>
+                <input type="number" name="iterations" min="1" value="5" />
+              </label>
+              <label>
+                <span>Warmup</span>
+                <input type="number" name="warmup" min="0" value="1" />
+              </label>
+              <label>
+                <span>Threads</span>
+                <input type="text" name="threads" value="1,2,4" />
+              </label>
+              <button type="submit" class="button">Run Benchmark</button>
+            </form>
+            <pre id="benchmark-output" class="console"></pre>
+          </section>
+
+          <section class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Reference</p>
+                <h2>Tensor Views</h2>
+                <p class="panel-copy">
+                  These are the most important tensors in the current pipeline. `Input` is what
+                  goes into the model. `Hidden Pre-ReLU` is the first linear layer output.
+                  `Hidden Post-ReLU` shows what remains after negative values are clamped to zero.
+                  `Logits` are the raw final scores. `Output` is the final normalized prediction.
+                </p>
+              </div>
+            </div>
+            <div id="tensor-grid" class="tensor-grid"></div>
+          </section>
+
+          <section class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Performance</p>
+                <h2>MatMul Results</h2>
+                <p class="panel-copy">
+                  These results compare raw matrix multiplication performance. Each card is one
+                  matrix shape. Shorter bars mean faster execution. This is useful for understanding
+                  the numerical kernel itself before looking at full model inference.
+                </p>
+              </div>
+              <p id="benchmark-source" class="muted"></p>
+            </div>
+            <div id="matmul-chart" class="chart-grid"></div>
+          </section>
+
+          <section class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Performance</p>
+                <h2>Model Results</h2>
+                <p class="panel-copy">
+                  These results measure full inference workloads, not just isolated matrix
+                  multiplication. This is the most important chart when you want to know whether an
+                  optimization actually helps the model as a whole.
+                </p>
+              </div>
+            </div>
+            <div id="model-chart" class="chart-grid"></div>
+          </section>
         </div>
-        <div class="hero-metrics" id="hero-metrics"></div>
-      </header>
-
-      <main class="dashboard-grid">
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Model</p>
-              <h2>Inference Flow</h2>
-            </div>
-            <button id="refresh-reference" class="button subtle">Refresh Reference Data</button>
-          </div>
-          <div id="architecture-flow" class="flow-strip"></div>
-          <div id="validation-card" class="validation-card"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Run</p>
-              <h2>Inference Check</h2>
-            </div>
-          </div>
-          <form id="inference-form" class="control-stack">
-            <label>
-              <span>Backend</span>
-              <select name="backend">
-                <option value="naive">naive</option>
-                <option value="transpose_rhs">transpose_rhs</option>
-                <option value="threaded_transpose_rhs" selected>threaded_transpose_rhs</option>
-              </select>
-            </label>
-            <label>
-              <span>Threads</span>
-              <input type="number" name="threads" min="1" value="4" />
-            </label>
-            <button type="submit" class="button">Run Inference</button>
-          </form>
-          <pre id="inference-output" class="console"></pre>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Run</p>
-              <h2>Benchmark Export</h2>
-            </div>
-          </div>
-          <form id="benchmark-form" class="control-stack">
-            <label>
-              <span>Iterations</span>
-              <input type="number" name="iterations" min="1" value="5" />
-            </label>
-            <label>
-              <span>Warmup</span>
-              <input type="number" name="warmup" min="0" value="1" />
-            </label>
-            <label>
-              <span>Threads</span>
-              <input type="text" name="threads" value="1,2,4" />
-            </label>
-            <button type="submit" class="button">Run Benchmark</button>
-          </form>
-          <pre id="benchmark-output" class="console"></pre>
-        </section>
-
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Reference</p>
-              <h2>Tensor Views</h2>
-            </div>
-          </div>
-          <div id="tensor-grid" class="tensor-grid"></div>
-        </section>
-
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Performance</p>
-              <h2>MatMul Results</h2>
-            </div>
-            <p id="benchmark-source" class="muted"></p>
-          </div>
-          <div id="matmul-chart" class="chart-grid"></div>
-        </section>
-
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Performance</p>
-              <h2>Model Results</h2>
-            </div>
-          </div>
-          <div id="model-chart" class="chart-grid"></div>
-        </section>
       </main>
     </div>
 
