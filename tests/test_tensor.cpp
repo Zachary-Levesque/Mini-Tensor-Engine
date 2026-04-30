@@ -1,8 +1,11 @@
 #include <cmath>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 
+#include "mte/io.hpp"
 #include "mte/layers.hpp"
+#include "mte/model.hpp"
 
 namespace {
 
@@ -42,6 +45,31 @@ int main() {
             sum += value;
         }
         Expect(AlmostEqual(sum, 1.0F), "softmax outputs must sum to 1");
+
+        const mte::TwoLayerPerceptron model(
+            mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
+                                 0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
+                                 -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
+                                 0.9F, -0.1F, 0.5F, 0.2F, -0.7F}),
+            mte::Tensor({1, 5}, {0.1F, -0.2F, 0.05F, 0.3F, -0.4F}),
+            mte::Tensor({5, 3}, {0.3F, -0.1F, 0.8F,
+                                 -0.6F, 0.4F, 0.2F,
+                                 0.5F, 0.7F, -0.3F,
+                                 0.1F, -0.5F, 0.9F,
+                                 -0.2F, 0.6F, 0.4F}),
+            mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}));
+
+        const mte::Tensor input({1, 4}, {1.0F, -2.0F, 3.0F, 0.5F});
+        const mte::Tensor output = model.Forward(input);
+        Expect(AlmostEqual(output.at(0, 0), 0.405884F, 1e-4F), "model mismatch at 0");
+        Expect(AlmostEqual(output.at(0, 1), 0.466877F, 1e-4F), "model mismatch at 1");
+        Expect(AlmostEqual(output.at(0, 2), 0.127239F, 1e-4F), "model mismatch at 2");
+
+        const std::filesystem::path scratch_dir = "build/test_output";
+        mte::SaveTensorToTextFile(output, scratch_dir / "roundtrip.txt");
+        const mte::Tensor roundtrip = mte::LoadTensorFromTextFile(scratch_dir / "roundtrip.txt");
+        Expect(mte::HasSameShape(output, roundtrip), "roundtrip shape mismatch");
+        Expect(AlmostEqual(output.at(0, 1), roundtrip.at(0, 1), 1e-6F), "roundtrip value mismatch");
 
         std::cout << "All tests passed.\n";
         return 0;

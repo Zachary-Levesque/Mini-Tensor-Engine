@@ -24,8 +24,8 @@ Tensor Softmax(const Tensor& input) {
     }
 
     Tensor output(input.shape(), input.data());
-    const std::size_t rows = input.shape()[0];
-    const std::size_t cols = input.shape()[1];
+    const std::size_t rows = input.rows();
+    const std::size_t cols = input.cols();
 
     for (std::size_t row = 0; row < rows; ++row) {
         float row_max = -std::numeric_limits<float>::infinity();

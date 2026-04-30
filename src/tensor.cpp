@@ -35,6 +35,20 @@ bool Tensor::empty() const noexcept {
     return data_.empty();
 }
 
+std::size_t Tensor::rows() const {
+    if (rank() != 2) {
+        throw std::logic_error("rows() requires a rank-2 tensor");
+    }
+    return shape_[0];
+}
+
+std::size_t Tensor::cols() const {
+    if (rank() != 2) {
+        throw std::logic_error("cols() requires a rank-2 tensor");
+    }
+    return shape_[1];
+}
+
 float& Tensor::at(std::size_t row, std::size_t col) {
     return data_.at(FlattenIndex(row, col));
 }
@@ -93,13 +107,13 @@ Tensor MatMul(const Tensor& lhs, const Tensor& rhs) {
     if (lhs.rank() != 2 || rhs.rank() != 2) {
         throw std::invalid_argument("MatMul currently supports only rank-2 tensors");
     }
-    if (lhs.shape()[1] != rhs.shape()[0]) {
+    if (lhs.cols() != rhs.rows()) {
         throw std::invalid_argument("MatMul shape mismatch");
     }
 
-    const std::size_t rows = lhs.shape()[0];
-    const std::size_t inner = lhs.shape()[1];
-    const std::size_t cols = rhs.shape()[1];
+    const std::size_t rows = lhs.rows();
+    const std::size_t inner = lhs.cols();
+    const std::size_t cols = rhs.cols();
 
     Tensor output({rows, cols});
     for (std::size_t row = 0; row < rows; ++row) {
@@ -118,17 +132,21 @@ Tensor AddBias(const Tensor& input, const Tensor& bias) {
     if (input.rank() != 2 || bias.rank() != 2) {
         throw std::invalid_argument("AddBias currently supports only rank-2 tensors");
     }
-    if (bias.shape()[0] != 1 || bias.shape()[1] != input.shape()[1]) {
+    if (bias.rows() != 1 || bias.cols() != input.cols()) {
         throw std::invalid_argument("bias shape must be [1, input_cols]");
     }
 
     Tensor output(input.shape(), input.data());
-    for (std::size_t row = 0; row < input.shape()[0]; ++row) {
-        for (std::size_t col = 0; col < input.shape()[1]; ++col) {
+    for (std::size_t row = 0; row < input.rows(); ++row) {
+        for (std::size_t col = 0; col < input.cols(); ++col) {
             output.at(row, col) += bias.at(0, col);
         }
     }
     return output;
+}
+
+bool HasSameShape(const Tensor& lhs, const Tensor& rhs) noexcept {
+    return lhs.shape() == rhs.shape();
 }
 
 }  // namespace mte

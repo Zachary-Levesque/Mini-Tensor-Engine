@@ -19,6 +19,8 @@ public:
     [[nodiscard]] std::size_t rank() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] std::size_t rows() const;
+    [[nodiscard]] std::size_t cols() const;
 
     [[nodiscard]] float& at(std::size_t row, std::size_t col);
     [[nodiscard]] const float& at(std::size_t row, std::size_t col) const;
@@ -38,5 +40,6 @@ private:
 
 Tensor MatMul(const Tensor& lhs, const Tensor& rhs);
 Tensor AddBias(const Tensor& input, const Tensor& bias);
+bool HasSameShape(const Tensor& lhs, const Tensor& rhs) noexcept;
 
 }  // namespace mte

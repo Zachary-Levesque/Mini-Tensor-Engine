@@ -10,6 +10,7 @@ option(MTE_BUILD_TESTS "Build Mini Tensor Engine tests" ON)
 add_library(mte
     src/io.cpp
     src/layers.cpp
+    src/model.cpp
     src/tensor.cpp
 )
 
@@ -27,6 +28,9 @@ target_compile_options(mte
 
 add_executable(mte_infer src/main.cpp)
 target_link_libraries(mte_infer PRIVATE mte)
+
+add_executable(mte_benchmark src/benchmark.cpp)
+target_link_libraries(mte_benchmark PRIVATE mte)
 
 if(MTE_BUILD_TESTS)
     enable_testing()
