@@ -126,17 +126,21 @@ The engine currently implements:
 
 - `Linear`
 - `ReLU`
+- `Sigmoid`
+- `Tanh`
 - `Softmax`
 
 Why these matter:
 
 - `Linear` performs the learned transformation
 - `ReLU` adds nonlinearity
+- `Sigmoid` squashes values into the range from 0 to 1
+- `Tanh` squashes values into the range from -1 to 1
 - `Softmax` converts final scores into probability-like outputs
 
 ### Model abstraction
 
-The engine uses a `TwoLayerPerceptron` model object.
+The engine uses a `FeedForwardModel` object driven by a simple `model.txt` manifest.
 
 Why it matters:
 
@@ -145,6 +149,7 @@ Why it matters:
 - runs the forward pass
 - supports backend selection
 - caches optimized weight layouts when needed
+- makes it easy to define different feed-forward networks without hardcoding one exact model
 
 ### IO
 
