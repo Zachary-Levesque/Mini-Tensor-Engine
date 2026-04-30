@@ -33,6 +33,10 @@ body {
   padding: 32px 0 48px;
 }
 
+.hidden {
+  display: none;
+}
+
 .hero {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
@@ -58,8 +62,8 @@ h3 {
 }
 
 h1 {
-  font-size: clamp(2.6rem, 5vw, 4.8rem);
-  line-height: 0.95;
+  font-size: clamp(2.8rem, 5vw, 5rem);
+  line-height: 0.96;
 }
 
 h2 {
@@ -67,15 +71,16 @@ h2 {
 }
 
 .hero-text,
-.muted {
+.muted,
+.panel-copy,
+.guide-text {
   color: var(--muted);
 }
 
-.hero-text {
-  max-width: 62ch;
+.hero-text,
+.guide-text {
   font-size: 1.05rem;
-  line-height: 1.65;
-  margin-top: 14px;
+  line-height: 1.7;
 }
 
 .hero-metrics {
@@ -84,7 +89,10 @@ h2 {
 }
 
 .metric-card,
-.panel {
+.summary-card,
+.guide-panel,
+.panel,
+.playground-banner {
   background: rgba(255, 250, 243, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.65);
   box-shadow: var(--panel-shadow);
@@ -111,16 +119,74 @@ h2 {
   font-family: var(--serif);
 }
 
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.summary-card,
+.guide-panel,
+.playground-banner,
+.panel {
+  border-radius: 26px;
+  padding: 22px;
+}
+
+.summary-card p,
+.guide-panel p,
+.summary-list,
+.panel-copy {
+  line-height: 1.65;
+}
+
+.summary-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+
+.summary-list li + li {
+  margin-top: 8px;
+}
+
+.guide-panel,
+.playground-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+}
+
+.button {
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+  color: white;
+  padding: 12px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button.large {
+  padding: 15px 24px;
+  font-size: 1rem;
+}
+
+.button.subtle {
+  background: rgba(31, 43, 36, 0.08);
+  color: var(--ink);
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 18px;
+  margin-top: 18px;
 }
 
 .panel {
   grid-column: span 4;
-  border-radius: 26px;
-  padding: 22px;
 }
 
 .panel-wide {
@@ -135,19 +201,9 @@ h2 {
   margin-bottom: 18px;
 }
 
-.button {
-  border: 0;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
-  color: white;
-  padding: 12px 18px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.button.subtle {
-  background: rgba(31, 43, 36, 0.08);
-  color: var(--ink);
+.panel-copy {
+  margin: 10px 0 0;
+  max-width: 68ch;
 }
 
 .control-stack {
@@ -234,6 +290,13 @@ select {
   font-size: 0.82rem;
 }
 
+.tensor-help {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 .tensor-table {
   width: 100%;
   border-collapse: collapse;
@@ -259,6 +322,12 @@ select {
   padding: 16px;
 }
 
+.chart-help {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .chart-bars {
   display: grid;
   gap: 10px;
@@ -267,7 +336,7 @@ select {
 
 .bar-row {
   display: grid;
-  grid-template-columns: 180px 1fr 110px;
+  grid-template-columns: 220px 1fr 110px;
   gap: 14px;
   align-items: center;
 }
@@ -296,7 +365,15 @@ select {
 }
 
 @media (max-width: 1000px) {
-  .hero {
+  .hero,
+  .guide-panel,
+  .playground-banner {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .summary-grid {
     grid-template-columns: 1fr;
   }
 
@@ -311,6 +388,9 @@ select {
     padding-top: 18px;
   }
 
+  .summary-card,
+  .guide-panel,
+  .playground-banner,
   .panel {
     padding: 18px;
     border-radius: 22px;
