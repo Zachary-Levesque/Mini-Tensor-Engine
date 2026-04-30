@@ -12,7 +12,7 @@ The initial milestone is correctness-first:
 - a reusable two-layer MLP model object
 - Python-generated reference weights and outputs
 - C++ inference executable with configurable reference-data path
-- separate benchmark executable for backend comparison, latency measurement, and thread scaling
+- separate benchmark executable for backend comparison, latency measurement, thread scaling, and larger synthetic inference workloads
 
 ## Roadmap
 
@@ -54,4 +54,4 @@ python3 python/export_reference.py
 
 The inference executable accepts `--data-dir <path>` if you want to point it at a different exported reference bundle.
 
-`mte_infer` also accepts `--backend naive|transpose_rhs|threaded_transpose_rhs` and `--threads <count>` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes, reports thread scaling, and measures a small end-to-end model path.
+`mte_infer` also accepts `--backend naive|transpose_rhs|threaded_transpose_rhs` and `--threads <count>` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes, reports thread scaling, and measures both the small demo model and larger synthetic inference workloads.
