@@ -9,6 +9,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_DIR = ROOT / "data" / "reference"
 
+# This script is the trusted Python reference path for correctness.
+# It reads the same model bundle format as C++ and prints the expected output.
+
 
 def read_tensor(path: Path) -> np.ndarray:
     with path.open("r", encoding="utf-8") as handle:
@@ -36,6 +39,7 @@ def softmax(x: np.ndarray) -> np.ndarray:
 
 
 def run_model_from_manifest(directory: Path, input_tensor: np.ndarray) -> np.ndarray:
+    # Execute the model exactly as described by model.txt so Python and C++ share the same flow.
     activations = input_tensor
     manifest_path = directory / "model.txt"
 
