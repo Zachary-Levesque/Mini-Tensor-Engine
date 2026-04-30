@@ -35,6 +35,22 @@ Tensor ReLU(const Tensor& input) {
     return output;
 }
 
+Tensor Sigmoid(const Tensor& input) {
+    Tensor output(input.shape(), input.data());
+    for (float& value : output.data()) {
+        value = 1.0F / (1.0F + std::exp(-value));
+    }
+    return output;
+}
+
+Tensor Tanh(const Tensor& input) {
+    Tensor output(input.shape(), input.data());
+    for (float& value : output.data()) {
+        value = std::tanh(value);
+    }
+    return output;
+}
+
 Tensor Softmax(const Tensor& input) {
     if (input.rank() != 2) {
         throw std::invalid_argument("Softmax currently supports only rank-2 tensors");
