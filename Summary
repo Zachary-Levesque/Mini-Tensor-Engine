@@ -6,9 +6,9 @@ This project is a custom **C++ machine learning inference engine** built from sc
 
 Simple meaning:
 
-- a trained neural network already has learned weights
-- inference means using those weights to make a prediction
-- this project builds the software that runs that prediction path in C++
+- A trained neural network already has learned weights
+- Inference means using those weights to make a prediction
+- This project builds the software that runs that prediction path in C++
 
 It is **not** about training models.
 
