@@ -8,8 +8,8 @@ The initial milestone is correctness-first:
 
 - contiguous rank-2 tensor storage
 - naive, cache-friendlier, and multithreaded CPU matrix multiplication backends
-- `Linear`, `ReLU`, and `Softmax` layers
-- a reusable two-layer MLP model object
+- `Linear`, `ReLU`, `Sigmoid`, `Tanh`, and `Softmax` layers
+- a reusable feed-forward model loader driven by a simple manifest format
 - Python-generated reference weights and outputs
 - C++ inference executable with configurable reference-data path
 - separate benchmark executable for backend comparison, latency measurement, thread scaling, and larger synthetic inference workloads
@@ -79,6 +79,17 @@ python3 python/export_reference.py
 The inference executable accepts `--data-dir <path>` if you want to point it at a different exported reference bundle.
 
 `mte_infer` also accepts `--backend naive|transpose_rhs|threaded_transpose_rhs` and `--threads <count>` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes, reports thread scaling, and measures both the small demo model and larger synthetic inference workloads.
+
+Reference bundles can include a `model.txt` manifest such as:
+
+```text
+linear w1.txt b1.txt
+relu
+linear w2.txt b2.txt
+softmax
+```
+
+The current manifest parser supports `linear`, `relu`, `sigmoid`, `tanh`, and `softmax`.
 
 `mte_benchmark` also accepts:
 
