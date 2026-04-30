@@ -64,7 +64,7 @@ int main() {
         }
         Expect(AlmostEqual(sum, 1.0F), "softmax outputs must sum to 1");
 
-        const mte::TwoLayerPerceptron naive_model(
+        const mte::FeedForwardModel naive_model = mte::FeedForwardModel::MakeTwoLayerPerceptron(
             mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
                                  0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
                                  -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
@@ -78,7 +78,7 @@ int main() {
             mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
             mte::MatMulBackend::kNaive);
 
-        const mte::TwoLayerPerceptron optimized_model(
+        const mte::FeedForwardModel optimized_model = mte::FeedForwardModel::MakeTwoLayerPerceptron(
             mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
                                  0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
                                  -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
@@ -92,7 +92,7 @@ int main() {
             mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
             mte::MatMulBackend::kTransposeRhs);
 
-        const mte::TwoLayerPerceptron threaded_model(
+        const mte::FeedForwardModel threaded_model = mte::FeedForwardModel::MakeTwoLayerPerceptron(
             mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
                                  0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
                                  -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
