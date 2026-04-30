@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Tensor Engine Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Local Demo UI</p>
+          <h1>Mini Tensor Engine</h1>
+          <p class="hero-text">
+            A clean interface for inspecting the model, tracing inference, validating output, and
+            viewing benchmark results from the C++ engine.
+          </p>
+        </div>
+        <div class="hero-metrics" id="hero-metrics"></div>
+      </header>
+
+      <main class="dashboard-grid">
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Model</p>
+              <h2>Inference Flow</h2>
+            </div>
+            <button id="refresh-reference" class="button subtle">Refresh Reference Data</button>
+          </div>
+          <div id="architecture-flow" class="flow-strip"></div>
+          <div id="validation-card" class="validation-card"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Run</p>
+              <h2>Inference Check</h2>
+            </div>
+          </div>
+          <form id="inference-form" class="control-stack">
+            <label>
+              <span>Backend</span>
+              <select name="backend">
+                <option value="naive">naive</option>
+                <option value="transpose_rhs">transpose_rhs</option>
+                <option value="threaded_transpose_rhs" selected>threaded_transpose_rhs</option>
+              </select>
+            </label>
+            <label>
+              <span>Threads</span>
+              <input type="number" name="threads" min="1" value="4" />
+            </label>
+            <button type="submit" class="button">Run Inference</button>
+          </form>
+          <pre id="inference-output" class="console"></pre>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Run</p>
+              <h2>Benchmark Export</h2>
+            </div>
+          </div>
+          <form id="benchmark-form" class="control-stack">
+            <label>
+              <span>Iterations</span>
+              <input type="number" name="iterations" min="1" value="5" />
+            </label>
+            <label>
+              <span>Warmup</span>
+              <input type="number" name="warmup" min="0" value="1" />
+            </label>
+            <label>
+              <span>Threads</span>
+              <input type="text" name="threads" value="1,2,4" />
+            </label>
+            <button type="submit" class="button">Run Benchmark</button>
+          </form>
+          <pre id="benchmark-output" class="console"></pre>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Reference</p>
+              <h2>Tensor Views</h2>
+            </div>
+          </div>
+          <div id="tensor-grid" class="tensor-grid"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Performance</p>
+              <h2>MatMul Results</h2>
+            </div>
+            <p id="benchmark-source" class="muted"></p>
+          </div>
+          <div id="matmul-chart" class="chart-grid"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Performance</p>
+              <h2>Model Results</h2>
+            </div>
+          </div>
+          <div id="model-chart" class="chart-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
