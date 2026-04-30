@@ -46,6 +46,9 @@ Options ParseArgs(int argc, char** argv) {
                 throw std::invalid_argument("--iterations requires a value");
             }
             options.iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
+            if (options.iterations == 0) {
+                throw std::invalid_argument("--iterations must be greater than 0");
+            }
             continue;
         }
         if (arg == "--warmup") {
@@ -69,11 +72,18 @@ Options ParseArgs(int argc, char** argv) {
             while (start < raw.size()) {
                 const std::size_t comma = raw.find(',', start);
                 const std::string token = raw.substr(start, comma - start);
-                options.thread_counts.push_back(static_cast<std::size_t>(std::stoull(token)));
+                const std::size_t num_threads = static_cast<std::size_t>(std::stoull(token));
+                if (num_threads == 0) {
+                    throw std::invalid_argument("--threads values must be greater than 0");
+                }
+                options.thread_counts.push_back(num_threads);
                 if (comma == std::string::npos) {
                     break;
                 }
                 start = comma + 1;
+            }
+            if (options.thread_counts.empty()) {
+                throw std::invalid_argument("--threads must provide at least one value");
             }
             continue;
         }
