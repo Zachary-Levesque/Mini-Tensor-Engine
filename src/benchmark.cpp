@@ -7,6 +7,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "mte/model.hpp"
@@ -24,6 +25,7 @@ struct Options {
     std::size_t iterations = 200;
     std::size_t warmup_iterations = 20;
     bool run_model_benchmark = true;
+    std::vector<std::size_t> thread_counts = {1, 2, 4, 8};
 };
 
 Options ParseArgs(int argc, char** argv) {
@@ -47,6 +49,24 @@ Options ParseArgs(int argc, char** argv) {
         }
         if (arg == "--skip-model") {
             options.run_model_benchmark = false;
+            continue;
+        }
+        if (arg == "--threads") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--threads requires a value");
+            }
+            options.thread_counts.clear();
+            std::string raw = argv[++i];
+            std::size_t start = 0;
+            while (start < raw.size()) {
+                const std::size_t comma = raw.find(',', start);
+                const std::string token = raw.substr(start, comma - start);
+                options.thread_counts.push_back(static_cast<std::size_t>(std::stoull(token)));
+                if (comma == std::string::npos) {
+                    break;
+                }
+                start = comma + 1;
+            }
             continue;
         }
         throw std::invalid_argument("unknown argument: " + std::string(arg));
@@ -106,7 +126,7 @@ void RunMatMulBenchmarks(const Options& options) {
 
     std::mt19937 generator(7);
     std::cout << "MatMul backend comparison\n";
-    std::cout << "case,backend,avg_ns\n";
+    std::cout << "case,backend,threads,avg_ns\n";
 
     for (const MatMulCase& benchmark_case : cases) {
         mte::Tensor lhs(
@@ -134,7 +154,24 @@ void RunMatMulBenchmarks(const Options& options) {
 
             std::cout << benchmark_case.rows << 'x' << benchmark_case.inner << 'x'
                       << benchmark_case.cols << ',' << mte::MatMulBackendName(backend) << ','
-                      << std::fixed << std::setprecision(2) << avg_ns << '\n';
+                      << 1 << ',' << std::fixed << std::setprecision(2) << avg_ns << '\n';
+        }
+
+        for (std::size_t num_threads : options.thread_counts) {
+            const double avg_ns = MeasureAverageNanoseconds(
+                [&]() {
+                    const mte::Tensor output = mte::MatMul(
+                        lhs, rhs, mte::MatMulBackend::kThreadedTransposeRhs, num_threads);
+                    sink += output.data()[0];
+                },
+                options.warmup_iterations,
+                options.iterations);
+
+            std::cout << benchmark_case.rows << 'x' << benchmark_case.inner << 'x'
+                      << benchmark_case.cols << ','
+                      << mte::MatMulBackendName(mte::MatMulBackend::kThreadedTransposeRhs)
+                      << ',' << num_threads << ',' << std::fixed << std::setprecision(2)
+                      << avg_ns << '\n';
         }
         std::cout << "case_sink," << sink << '\n';
     }
@@ -169,24 +206,47 @@ void RunModelBenchmark(const Options& options) {
         mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
         mte::MatMulBackend::kTransposeRhs);
 
+    std::vector<mte::TwoLayerPerceptron> models;
+    models.push_back(naive_model);
+    models.push_back(optimized_model);
+    for (std::size_t num_threads : options.thread_counts) {
+        models.emplace_back(
+            mte::Tensor({4, 5}, {0.2F, -0.4F, 0.1F, 0.5F, -0.3F,
+                                 0.7F, 0.6F, -0.2F, 0.1F, 0.8F,
+                                 -0.5F, 0.2F, 0.3F, -0.6F, 0.4F,
+                                 0.9F, -0.1F, 0.5F, 0.2F, -0.7F}),
+            mte::Tensor({1, 5}, {0.1F, -0.2F, 0.05F, 0.3F, -0.4F}),
+            mte::Tensor({5, 3}, {0.3F, -0.1F, 0.8F,
+                                 -0.6F, 0.4F, 0.2F,
+                                 0.5F, 0.7F, -0.3F,
+                                 0.1F, -0.5F, 0.9F,
+                                 -0.2F, 0.6F, 0.4F}),
+            mte::Tensor({1, 3}, {0.05F, -0.15F, 0.25F}),
+            mte::MatMulBackend::kThreadedTransposeRhs,
+            num_threads);
+    }
+
     const mte::Tensor input({1, 4}, {1.0F, -2.0F, 3.0F, 0.5F});
-    ValidateEquivalent(naive_model.Forward(input), optimized_model.Forward(input));
+    const mte::Tensor baseline_output = naive_model.Forward(input);
+    for (const mte::TwoLayerPerceptron& model : models) {
+        ValidateEquivalent(baseline_output, model.Forward(input));
+    }
 
     std::cout << "Model backend comparison\n";
-    std::cout << "backend,avg_ns\n";
+    std::cout << "backend,threads,avg_ns\n";
 
     volatile float sink = 0.0F;
-    for (const mte::TwoLayerPerceptron* model : {&naive_model, &optimized_model}) {
+    for (const mte::TwoLayerPerceptron& model : models) {
         const double avg_ns = MeasureAverageNanoseconds(
             [&]() {
-                const mte::Tensor output = model->Forward(input);
+                const mte::Tensor output = model.Forward(input);
                 sink += output.data()[0];
             },
             options.warmup_iterations,
             options.iterations);
 
-        std::cout << mte::MatMulBackendName(model->backend()) << ',' << std::fixed
-                  << std::setprecision(2) << avg_ns << '\n';
+        std::cout << mte::MatMulBackendName(model.backend()) << ',' << model.num_threads()
+                  << ',' << std::fixed << std::setprecision(2) << avg_ns << '\n';
     }
     std::cout << "model_sink," << sink << '\n';
 }

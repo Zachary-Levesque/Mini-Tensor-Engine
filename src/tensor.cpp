@@ -4,6 +4,8 @@
 #include <functional>
 #include <numeric>
 #include <sstream>
+#include <thread>
+#include <vector>
 
 namespace mte {
 
@@ -141,6 +143,14 @@ Tensor MatMulTransposeRhs(const Tensor& lhs, const Tensor& rhs) {
     return MatMulWithPretransposedRhs(lhs, Transpose(rhs));
 }
 
+Tensor MatMulThreadedTransposeRhs(
+    const Tensor& lhs,
+    const Tensor& rhs,
+    std::size_t num_threads) {
+    ValidateMatMulInputs(lhs, rhs);
+    return MatMulWithPretransposedRhs(lhs, Transpose(rhs), num_threads);
+}
+
 }  // namespace
 
 Tensor Transpose(const Tensor& input) {
@@ -158,6 +168,13 @@ Tensor Transpose(const Tensor& input) {
 }
 
 Tensor MatMulWithPretransposedRhs(const Tensor& lhs, const Tensor& rhs_transposed) {
+    return MatMulWithPretransposedRhs(lhs, rhs_transposed, 1);
+}
+
+Tensor MatMulWithPretransposedRhs(
+    const Tensor& lhs,
+    const Tensor& rhs_transposed,
+    std::size_t num_threads) {
     if (lhs.rank() != 2 || rhs_transposed.rank() != 2) {
         throw std::invalid_argument(
             "MatMulWithPretransposedRhs currently supports only rank-2 tensors");
@@ -172,18 +189,51 @@ Tensor MatMulWithPretransposedRhs(const Tensor& lhs, const Tensor& rhs_transpose
     }
 
     Tensor output({rows, cols});
-    for (std::size_t row = 0; row < rows; ++row) {
-        for (std::size_t col = 0; col < cols; ++col) {
-            const float* lhs_row = lhs.data().data() + (row * inner);
-            const float* rhs_row = rhs_transposed.data().data() + (col * inner);
 
-            float sum = 0.0F;
-            for (std::size_t k = 0; k < inner; ++k) {
-                sum += lhs_row[k] * rhs_row[k];
+    const std::size_t effective_threads =
+        std::max<std::size_t>(1, std::min(num_threads, rows));
+
+    auto compute_rows = [&](std::size_t row_begin, std::size_t row_end) {
+        for (std::size_t row = row_begin; row < row_end; ++row) {
+            for (std::size_t col = 0; col < cols; ++col) {
+                const float* lhs_row = lhs.data().data() + (row * inner);
+                const float* rhs_row = rhs_transposed.data().data() + (col * inner);
+
+                float sum = 0.0F;
+                for (std::size_t k = 0; k < inner; ++k) {
+                    sum += lhs_row[k] * rhs_row[k];
+                }
+                output.at(row, col) = sum;
             }
-            output.at(row, col) = sum;
         }
+    };
+
+    if (effective_threads == 1) {
+        compute_rows(0, rows);
+        return output;
     }
+
+    std::vector<std::thread> workers;
+    workers.reserve(effective_threads - 1);
+
+    const std::size_t rows_per_thread = rows / effective_threads;
+    const std::size_t extra_rows = rows % effective_threads;
+
+    std::size_t next_row = 0;
+    for (std::size_t thread_index = 0; thread_index < effective_threads - 1; ++thread_index) {
+        const std::size_t row_count = rows_per_thread + (thread_index < extra_rows ? 1 : 0);
+        const std::size_t row_begin = next_row;
+        const std::size_t row_end = row_begin + row_count;
+        workers.emplace_back(compute_rows, row_begin, row_end);
+        next_row = row_end;
+    }
+
+    compute_rows(next_row, rows);
+
+    for (std::thread& worker : workers) {
+        worker.join();
+    }
+
     return output;
 }
 
@@ -192,11 +242,17 @@ Tensor MatMul(const Tensor& lhs, const Tensor& rhs) {
 }
 
 Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend) {
+    return MatMul(lhs, rhs, backend, 1);
+}
+
+Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend, std::size_t num_threads) {
     switch (backend) {
         case MatMulBackend::kNaive:
             return MatMulNaive(lhs, rhs);
         case MatMulBackend::kTransposeRhs:
             return MatMulTransposeRhs(lhs, rhs);
+        case MatMulBackend::kThreadedTransposeRhs:
+            return MatMulThreadedTransposeRhs(lhs, rhs, num_threads);
     }
 
     throw std::invalid_argument("unknown MatMul backend");
@@ -229,6 +285,8 @@ const char* MatMulBackendName(MatMulBackend backend) noexcept {
             return "naive";
         case MatMulBackend::kTransposeRhs:
             return "transpose_rhs";
+        case MatMulBackend::kThreadedTransposeRhs:
+            return "threaded_transpose_rhs";
     }
     return "unknown";
 }

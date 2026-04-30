@@ -17,6 +17,7 @@ bool AlmostEqual(float lhs, float rhs, float tolerance = 1e-5F) {
 struct Options {
     std::filesystem::path data_dir = "data/reference";
     mte::MatMulBackend backend = mte::MatMulBackend::kTransposeRhs;
+    std::size_t num_threads = 1;
 };
 
 [[nodiscard]] mte::MatMulBackend ParseBackend(std::string_view value) {
@@ -25,6 +26,9 @@ struct Options {
     }
     if (value == "transpose_rhs") {
         return mte::MatMulBackend::kTransposeRhs;
+    }
+    if (value == "threaded_transpose_rhs") {
+        return mte::MatMulBackend::kThreadedTransposeRhs;
     }
     throw std::invalid_argument("unknown backend: " + std::string(value));
 }
@@ -46,6 +50,13 @@ Options ParseArgs(int argc, char** argv) {
                 throw std::invalid_argument("--backend requires a value");
             }
             options.backend = ParseBackend(argv[++i]);
+            continue;
+        }
+        if (arg == "--threads") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--threads requires a value");
+            }
+            options.num_threads = static_cast<std::size_t>(std::stoull(argv[++i]));
             continue;
         }
         throw std::invalid_argument("unknown argument: " + std::string(arg));
@@ -92,10 +103,12 @@ int main(int argc, char** argv) {
         const Options options = ParseArgs(argc, argv);
         const mte::ReferenceCase reference_case = mte::LoadReferenceCase(options.data_dir);
         const mte::TwoLayerPerceptron model =
-            mte::TwoLayerPerceptron::LoadFromDirectory(options.data_dir, options.backend);
+            mte::TwoLayerPerceptron::LoadFromDirectory(
+                options.data_dir, options.backend, options.num_threads);
         const mte::Tensor output = model.Forward(reference_case.input);
 
         std::cout << "Backend: " << mte::MatMulBackendName(model.backend()) << '\n';
+        std::cout << "Threads: " << model.num_threads() << '\n';
         PrintTensor(output, "C++ output");
 
         if (!MatchesWithinTolerance(output, reference_case.expected_output)) {

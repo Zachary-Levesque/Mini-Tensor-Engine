@@ -7,12 +7,12 @@ High-performance ML inference engine in C++ with a custom tensor implementation,
 The initial milestone is correctness-first:
 
 - contiguous rank-2 tensor storage
-- naive and cache-friendlier CPU matrix multiplication backends
+- naive, cache-friendlier, and multithreaded CPU matrix multiplication backends
 - `Linear`, `ReLU`, and `Softmax` layers
 - a reusable two-layer MLP model object
 - Python-generated reference weights and outputs
 - C++ inference executable with configurable reference-data path
-- separate benchmark executable for backend comparison and latency measurement
+- separate benchmark executable for backend comparison, latency measurement, and thread scaling
 
 ## Roadmap
 
@@ -40,8 +40,8 @@ The UI phase is intended as the final presentation layer on top of the real engi
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build
-./build/mte_infer --backend transpose_rhs
-./build/mte_benchmark --iterations 200 --warmup 20
+./build/mte_infer --backend threaded_transpose_rhs --threads 4
+./build/mte_benchmark --iterations 200 --warmup 20 --threads 1,2,4,8
 ```
 
 ## Reference Data
@@ -54,4 +54,4 @@ python3 python/export_reference.py
 
 The inference executable accepts `--data-dir <path>` if you want to point it at a different exported reference bundle.
 
-`mte_infer` also accepts `--backend naive|transpose_rhs` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes and a small end-to-end model path.
+`mte_infer` also accepts `--backend naive|transpose_rhs|threaded_transpose_rhs` and `--threads <count>` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes, reports thread scaling, and measures a small end-to-end model path.

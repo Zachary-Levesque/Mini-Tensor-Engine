@@ -11,6 +11,7 @@ namespace mte {
 enum class MatMulBackend {
     kNaive,
     kTransposeRhs,
+    kThreadedTransposeRhs,
 };
 
 class Tensor {
@@ -45,8 +46,13 @@ private:
 
 Tensor MatMul(const Tensor& lhs, const Tensor& rhs);
 Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend);
+Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend, std::size_t num_threads);
 Tensor Transpose(const Tensor& input);
 Tensor MatMulWithPretransposedRhs(const Tensor& lhs, const Tensor& rhs_transposed);
+Tensor MatMulWithPretransposedRhs(
+    const Tensor& lhs,
+    const Tensor& rhs_transposed,
+    std::size_t num_threads);
 Tensor AddBias(const Tensor& input, const Tensor& bias);
 bool HasSameShape(const Tensor& lhs, const Tensor& rhs) noexcept;
 const char* MatMulBackendName(MatMulBackend backend) noexcept;

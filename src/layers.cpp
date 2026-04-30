@@ -15,7 +15,16 @@ Tensor Linear(
     const Tensor& weights,
     const Tensor& bias,
     MatMulBackend backend) {
-    return AddBias(MatMul(input, weights, backend), bias);
+    return Linear(input, weights, bias, backend, 1);
+}
+
+Tensor Linear(
+    const Tensor& input,
+    const Tensor& weights,
+    const Tensor& bias,
+    MatMulBackend backend,
+    std::size_t num_threads) {
+    return AddBias(MatMul(input, weights, backend, num_threads), bias);
 }
 
 Tensor ReLU(const Tensor& input) {
