@@ -1,0 +1,5 @@
+# Sequential feedforward model definition
+linear w1.txt b1.txt
+sigmoid
+linear w2.txt b2.txt
+softmax

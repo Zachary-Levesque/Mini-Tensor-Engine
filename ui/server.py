@@ -6,7 +6,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 
@@ -14,11 +14,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 REFERENCE_DIR = ROOT / "data" / "reference"
+EXAMPLES_DIR = ROOT / "data" / "examples"
 DEFAULT_BENCHMARK_JSON = ROOT / "build" / "benchmark_results.json"
 DEFAULT_BENCHMARK_CSV = ROOT / "build" / "benchmark_results.csv"
 INFER_BINARY = ROOT / "build" / "mte_infer"
 BENCHMARK_BINARY = ROOT / "build" / "mte_benchmark"
 EXPORT_SCRIPT = ROOT / "python" / "export_reference.py"
+DEFAULT_EXAMPLE_ID = "relu_classifier"
 
 ALLOWED_BACKENDS = {
     "naive",
@@ -49,63 +51,257 @@ def tensor_payload(tensor: np.ndarray) -> dict[str, Any]:
     }
 
 
+def relu(x: np.ndarray) -> np.ndarray:
+    return np.maximum(x, 0.0)
+
+
+def sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def tanh(x: np.ndarray) -> np.ndarray:
+    return np.tanh(x)
+
+
 def softmax(x: np.ndarray) -> np.ndarray:
     shifted = x - np.max(x, axis=1, keepdims=True)
     exp_values = np.exp(shifted)
     return exp_values / np.sum(exp_values, axis=1, keepdims=True)
 
 
-def load_model_architecture() -> dict[str, Any]:
-    manifest_path = REFERENCE_DIR / "model.txt"
+def parse_manifest(directory: Path) -> list[dict[str, str]]:
+    manifest_path = directory / "model.txt"
     if not manifest_path.exists():
-        return {
-            "name": "FeedForwardModel",
-            "flow": ["Input", "Linear", "ReLU", "Linear", "Softmax"],
+        return [
+            {"type": "linear", "weights": "w1.txt", "bias": "b1.txt"},
+            {"type": "relu"},
+            {"type": "linear", "weights": "w2.txt", "bias": "b2.txt"},
+            {"type": "softmax"},
+        ]
+
+    layers: list[dict[str, str]] = []
+    for raw_line in manifest_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = line.split()
+        layer_type = tokens[0].lower()
+        if layer_type == "linear":
+            layers.append({"type": layer_type, "weights": tokens[1], "bias": tokens[2]})
+        else:
+            layers.append({"type": layer_type})
+    return layers
+
+
+def discover_examples() -> list[dict[str, Any]]:
+    examples: list[dict[str, Any]] = []
+    if EXAMPLES_DIR.exists():
+        for directory in sorted(path for path in EXAMPLES_DIR.iterdir() if path.is_dir()):
+            meta_path = directory / "meta.json"
+            metadata: dict[str, Any] = {}
+            if meta_path.exists():
+                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+            example_id = metadata.get("id", directory.name)
+            examples.append(
+                {
+                    "id": example_id,
+                    "title": metadata.get("title", directory.name.replace("_", " ").title()),
+                    "summary": metadata.get("summary", "Example model bundle."),
+                    "interview_note": metadata.get("interview_note", ""),
+                    "path": str(directory.relative_to(ROOT)),
+                }
+            )
+
+    if not examples:
+        examples.append(
+            {
+                "id": DEFAULT_EXAMPLE_ID,
+                "title": "Reference Model",
+                "summary": "Fallback reference bundle.",
+                "interview_note": "",
+                "path": str(REFERENCE_DIR.relative_to(ROOT)),
+            }
+        )
+    return examples
+
+
+def resolve_example_directory(example_id: str | None) -> tuple[dict[str, Any], Path]:
+    examples = discover_examples()
+    example_map = {example["id"]: example for example in examples}
+    selected = example_map.get(example_id or DEFAULT_EXAMPLE_ID, examples[0])
+    return selected, ROOT / selected["path"]
+
+
+def describe_linear_output(index: int) -> str:
+    return (
+        f"This is the output immediately after linear layer {index}. "
+        "A linear layer multiplies the input by a weight matrix and then adds a bias."
+    )
+
+
+def describe_activation_output(layer_type: str, index: int) -> str:
+    if layer_type == "relu":
+        return (
+            f"This is the output after ReLU {index}. ReLU keeps positive values and clamps "
+            "negative values to zero."
+        )
+    if layer_type == "sigmoid":
+        return (
+            f"This is the output after Sigmoid {index}. Sigmoid squashes each value into the "
+            "range from 0 to 1."
+        )
+    if layer_type == "tanh":
+        return (
+            f"This is the output after Tanh {index}. Tanh squashes each value into the range "
+            "from -1 to 1."
+        )
+    return (
+        "This is the output after Softmax. Softmax turns the final scores into normalized "
+        "probabilities that sum to 1."
+    )
+
+
+def build_trace_tensors(directory: Path, input_tensor: np.ndarray) -> tuple[list[dict[str, Any]], np.ndarray]:
+    layers = parse_manifest(directory)
+    activations = input_tensor
+    tensors: list[dict[str, Any]] = [
+        {
+            "key": "input",
+            "label": "Input",
+            "group": "activations",
+            "description": "This is the data that goes into the model.",
+            **tensor_payload(input_tensor),
         }
+    ]
 
-    flow = ["Input"]
-    with manifest_path.open("r", encoding="utf-8") as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-            layer_name = line.split()[0].lower()
-            flow.append(LAYER_LABELS.get(layer_name, layer_name.title()))
+    linear_count = 0
+    relu_count = 0
+    sigmoid_count = 0
+    tanh_count = 0
+
+    for layer in layers:
+        layer_type = layer["type"]
+        if layer_type == "linear":
+            linear_count += 1
+            weights = read_tensor(directory / layer["weights"])
+            bias = read_tensor(directory / layer["bias"])
+            tensors.append(
+                {
+                    "key": f"weights_{linear_count}",
+                    "label": f"Weights {linear_count}",
+                    "group": "parameters",
+                    "description": f"These are the learned weights for linear layer {linear_count}.",
+                    **tensor_payload(weights),
+                }
+            )
+            tensors.append(
+                {
+                    "key": f"bias_{linear_count}",
+                    "label": f"Bias {linear_count}",
+                    "group": "parameters",
+                    "description": f"This is the bias vector added after linear layer {linear_count}.",
+                    **tensor_payload(bias),
+                }
+            )
+            activations = activations @ weights + bias
+            tensors.append(
+                {
+                    "key": f"linear_{linear_count}_output",
+                    "label": f"After Linear {linear_count}",
+                    "group": "activations",
+                    "description": describe_linear_output(linear_count),
+                    **tensor_payload(activations),
+                }
+            )
+            continue
+
+        if layer_type == "relu":
+            relu_count += 1
+            activations = relu(activations)
+            label = "Output" if layer == layers[-1] else f"After ReLU {relu_count}"
+            tensors.append(
+                {
+                    "key": f"relu_{relu_count}_output",
+                    "label": label,
+                    "group": "activations",
+                    "description": describe_activation_output("relu", relu_count),
+                    **tensor_payload(activations),
+                }
+            )
+            continue
+
+        if layer_type == "sigmoid":
+            sigmoid_count += 1
+            activations = sigmoid(activations)
+            label = "Output" if layer == layers[-1] else f"After Sigmoid {sigmoid_count}"
+            tensors.append(
+                {
+                    "key": f"sigmoid_{sigmoid_count}_output",
+                    "label": label,
+                    "group": "activations",
+                    "description": describe_activation_output("sigmoid", sigmoid_count),
+                    **tensor_payload(activations),
+                }
+            )
+            continue
+
+        if layer_type == "tanh":
+            tanh_count += 1
+            activations = tanh(activations)
+            label = "Output" if layer == layers[-1] else f"After Tanh {tanh_count}"
+            tensors.append(
+                {
+                    "key": f"tanh_{tanh_count}_output",
+                    "label": label,
+                    "group": "activations",
+                    "description": describe_activation_output("tanh", tanh_count),
+                    **tensor_payload(activations),
+                }
+            )
+            continue
+
+        if layer_type == "softmax":
+            activations = softmax(activations)
+            tensors.append(
+                {
+                    "key": "output",
+                    "label": "Output",
+                    "group": "activations",
+                    "description": describe_activation_output("softmax", 1),
+                    **tensor_payload(activations),
+                }
+            )
+            continue
+
+        raise ValueError(f"Unsupported layer type in UI trace: {layer_type}")
+
+    return tensors, activations
+
+
+def load_reference_payload(example_id: str | None = None) -> dict[str, Any]:
+    example, directory = resolve_example_directory(example_id)
+    input_tensor = read_tensor(directory / "input.txt")
+    expected_output = read_tensor(directory / "output.txt")
+    trace_tensors, computed_output = build_trace_tensors(directory, input_tensor)
+    max_abs_diff = float(np.max(np.abs(computed_output - expected_output)))
+
+    tensors = trace_tensors + [
+        {
+            "key": "expected_output",
+            "label": "Expected Output",
+            "group": "reference",
+            "description": "This is the stored Python reference output used for correctness checking.",
+            **tensor_payload(expected_output),
+        }
+    ]
 
     return {
-        "name": "FeedForwardModel",
-        "flow": flow,
-    }
-
-
-def load_reference_payload() -> dict[str, Any]:
-    input_tensor = read_tensor(REFERENCE_DIR / "input.txt")
-    w1 = read_tensor(REFERENCE_DIR / "w1.txt")
-    b1 = read_tensor(REFERENCE_DIR / "b1.txt")
-    w2 = read_tensor(REFERENCE_DIR / "w2.txt")
-    b2 = read_tensor(REFERENCE_DIR / "b2.txt")
-    expected_output = read_tensor(REFERENCE_DIR / "output.txt")
-
-    hidden_linear = input_tensor @ w1 + b1
-    hidden_relu = np.maximum(hidden_linear, 0.0)
-    logits = hidden_relu @ w2 + b2
-    output = softmax(logits)
-    max_abs_diff = float(np.max(np.abs(output - expected_output)))
-
-    return {
-        "architecture": load_model_architecture(),
-        "tensors": {
-            "input": tensor_payload(input_tensor),
-            "w1": tensor_payload(w1),
-            "b1": tensor_payload(b1),
-            "w2": tensor_payload(w2),
-            "b2": tensor_payload(b2),
-            "hidden_linear": tensor_payload(hidden_linear),
-            "hidden_relu": tensor_payload(hidden_relu),
-            "logits": tensor_payload(logits),
-            "output": tensor_payload(output),
-            "expected_output": tensor_payload(expected_output),
+        "example": example,
+        "architecture": {
+            "name": "FeedForwardModel",
+            "flow": ["Input"] + [LAYER_LABELS.get(layer["type"], layer["type"].title()) for layer in parse_manifest(directory)],
         },
+        "tensors": tensors,
         "validation": {
             "matches_reference": bool(max_abs_diff <= 1e-5),
             "max_abs_diff": max_abs_diff,
@@ -143,10 +339,13 @@ def run_command(args: list[str]) -> dict[str, Any]:
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
-    server_version = "MiniTensorEngineUI/0.1"
+    server_version = "MiniTensorEngineUI/0.2"
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        selected_example = params.get("example", [None])[0]
+
         if parsed.path == "/":
             self._serve_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             return
@@ -167,7 +366,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             "Python, and benchmark-driven optimization."
                         ),
                     },
-                    "reference": load_reference_payload(),
+                    "examples": discover_examples(),
+                    "reference": load_reference_payload(selected_example),
                     "benchmarks": load_benchmark_payload(),
                 }
             )
@@ -181,13 +381,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         payload = self._read_json_body()
+        selected_example = payload.get("example")
 
         if parsed.path == "/api/refresh-reference":
             command = run_command(["python3", str(EXPORT_SCRIPT)])
             self._send_json(
                 {
                     "command": command,
-                    "reference": load_reference_payload(),
+                    "examples": discover_examples(),
+                    "reference": load_reference_payload(selected_example),
                 },
                 HTTPStatus.OK if command["returncode"] == 0 else HTTPStatus.BAD_REQUEST,
             )
@@ -203,9 +405,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "Threads must be greater than 0"}, HTTPStatus.BAD_REQUEST)
                 return
 
+            _, directory = resolve_example_directory(selected_example)
             command = run_command(
                 [
                     str(INFER_BINARY),
+                    "--data-dir",
+                    str(directory),
                     "--backend",
                     backend,
                     "--threads",
@@ -290,7 +495,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 8000), DashboardHandler)
     print("Mini Tensor Engine UI running at http://127.0.0.1:8000")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutting down UI server.")
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":

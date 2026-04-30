@@ -1,0 +1,6 @@
+{
+  "id": "relu_classifier",
+  "title": "ReLU Classifier",
+  "summary": "A small classifier that uses the classic Linear -> ReLU -> Linear -> Softmax pipeline.",
+  "interview_note": "This is the clean baseline example for correctness, cache-aware matmul, and threading."
+}

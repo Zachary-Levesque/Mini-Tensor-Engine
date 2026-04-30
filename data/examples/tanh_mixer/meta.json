@@ -1,0 +1,6 @@
+{
+  "id": "tanh_mixer",
+  "title": "Tanh Mixer",
+  "summary": "A deeper example that mixes Tanh and ReLU to show a longer feed-forward manifest.",
+  "interview_note": "This demonstrates that the model system can represent more than one hidden stage without hardcoding architecture logic."
+}

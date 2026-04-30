@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -32,15 +35,15 @@ def softmax(x: np.ndarray) -> np.ndarray:
     return exp_values / np.sum(exp_values, axis=1, keepdims=True)
 
 
-def run_model_from_manifest(input_tensor: np.ndarray) -> np.ndarray:
+def run_model_from_manifest(directory: Path, input_tensor: np.ndarray) -> np.ndarray:
     activations = input_tensor
-    manifest_path = REFERENCE_DIR / "model.txt"
+    manifest_path = directory / "model.txt"
 
     if not manifest_path.exists():
-        w1 = read_tensor(REFERENCE_DIR / "w1.txt")
-        b1 = read_tensor(REFERENCE_DIR / "b1.txt")
-        w2 = read_tensor(REFERENCE_DIR / "w2.txt")
-        b2 = read_tensor(REFERENCE_DIR / "b2.txt")
+        w1 = read_tensor(directory / "w1.txt")
+        b1 = read_tensor(directory / "b1.txt")
+        w2 = read_tensor(directory / "w2.txt")
+        b2 = read_tensor(directory / "b2.txt")
         return softmax(relu(activations @ w1 + b1) @ w2 + b2)
 
     for raw_line in manifest_path.read_text(encoding="utf-8").splitlines():
@@ -51,8 +54,8 @@ def run_model_from_manifest(input_tensor: np.ndarray) -> np.ndarray:
         layer_type = tokens[0]
 
         if layer_type == "linear":
-            weights = read_tensor(REFERENCE_DIR / tokens[1])
-            bias = read_tensor(REFERENCE_DIR / tokens[2])
+            weights = read_tensor(directory / tokens[1])
+            bias = read_tensor(directory / tokens[2])
             activations = activations @ weights + bias
         elif layer_type == "relu":
             activations = relu(activations)
@@ -68,12 +71,24 @@ def run_model_from_manifest(input_tensor: np.ndarray) -> np.ndarray:
     return activations
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Python reference model.")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=REFERENCE_DIR,
+        help="Directory containing input.txt, model.txt, and tensor files.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    input_tensor = read_tensor(REFERENCE_DIR / "input.txt")
-    output = run_model_from_manifest(input_tensor)
+    args = parse_args()
+    input_tensor = read_tensor(args.data_dir / "input.txt")
+    output = run_model_from_manifest(args.data_dir, input_tensor)
 
     np.set_printoptions(precision=6, suppress=True)
-    print("Python baseline output:")
+    print(f"Python baseline output ({args.data_dir}):")
     print(output)
 
 

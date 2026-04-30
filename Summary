@@ -168,10 +168,12 @@ The project includes:
 - backend equivalence validation
 - numerical tolerance comparisons
 - runtime benchmarking
+- multiple sample model bundles for demonstration
 
 Why it matters:
 
 - performance work is only useful if the results stay correct
+- the engine is easier to explain when the architecture can be switched and observed
 
 ---
 

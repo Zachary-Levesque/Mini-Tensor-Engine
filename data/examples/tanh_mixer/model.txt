@@ -1,0 +1,7 @@
+# Sequential feedforward model definition
+linear w1.txt b1.txt
+tanh
+linear w2.txt b2.txt
+relu
+linear w3.txt b3.txt
+softmax

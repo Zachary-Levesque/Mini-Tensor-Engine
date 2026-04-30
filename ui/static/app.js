@@ -1,17 +1,8 @@
 const state = {
+  examples: [],
+  selectedExample: null,
   reference: null,
   benchmarks: null,
-};
-
-const tensorHelp = {
-  input: "This is the data that goes into the model.",
-  hidden_linear: "This is the first linear layer output before ReLU is applied.",
-  hidden_relu: "This is the hidden layer after all negative values are clamped to zero.",
-  logits: "These are the raw final scores before Softmax normalization.",
-  output: "This is the final prediction after Softmax. The values sum to 1.",
-  expected_output: "This is the stored Python reference output used for correctness checking.",
-  w1: "These are the first layer weights used by the model.",
-  w2: "These are the second layer weights used by the model.",
 };
 
 async function fetchJson(url, options = {}) {
@@ -33,9 +24,43 @@ function formatNumber(value) {
   return `${value.toFixed(2)} ns`;
 }
 
+function getCurrentExample() {
+  return state.reference?.example || state.examples.find((example) => example.id === state.selectedExample) || null;
+}
+
+function renderExampleSelectors() {
+  const selects = [
+    document.getElementById("summary-example-select"),
+    document.getElementById("playground-example-select"),
+  ];
+  const options = state.examples
+    .map(
+      (example) =>
+        `<option value="${example.id}" ${example.id === state.selectedExample ? "selected" : ""}>${example.title}</option>`
+    )
+    .join("");
+
+  for (const select of selects) {
+    if (!select) continue;
+    select.innerHTML = options;
+    select.value = state.selectedExample;
+  }
+
+  const example = getCurrentExample();
+  if (!example) return;
+
+  document.getElementById("summary-example-title").textContent = example.title;
+  document.getElementById("summary-example-text").textContent = example.summary;
+  document.getElementById("summary-example-note").textContent = example.interview_note;
+
+  document.getElementById("playground-example-title").textContent = example.title;
+  document.getElementById("playground-example-text").textContent = example.summary;
+}
+
 function renderMetrics() {
   const container = document.getElementById("hero-metrics");
   const validation = state.reference?.validation;
+  const flow = state.reference?.architecture?.flow || [];
   const modelResults = state.benchmarks?.model_results || [];
   const bestModel = modelResults.reduce((best, current) => {
     if (!best || current.avg_ns < best.avg_ns) return current;
@@ -49,7 +74,7 @@ function renderMetrics() {
     },
     {
       label: "What It Runs",
-      value: "Linear → ReLU → Linear → Softmax",
+      value: flow.join(" -> ") || "No model loaded",
     },
     {
       label: "Fastest Current Model Run",
@@ -75,6 +100,11 @@ function renderArchitecture() {
     .map((step) => `<div class="flow-chip">${step}</div>`)
     .join("");
 
+  const example = getCurrentExample();
+  document.getElementById("architecture-context").innerHTML = example
+    ? `<strong>${example.title}</strong>: ${example.summary}`
+    : "";
+
   const validation = state.reference?.validation;
   const className = validation?.matches_reference ? "validation-good" : "validation-bad";
   document.getElementById("validation-card").innerHTML = `
@@ -83,45 +113,39 @@ function renderArchitecture() {
     </h3>
     <p class="muted">Max absolute difference: ${validation ? validation.max_abs_diff.toExponential(3) : "n/a"}</p>
     <p class="muted">
-      This matters because correctness comes first. Performance improvements are only useful if the
-      engine still produces the same answer as the trusted Python path.
+      This check is the foundation of the project. If the C++ engine does not match the trusted
+      Python output, then performance numbers are not meaningful yet.
     </p>
   `;
 }
 
 function renderTensors() {
-  const tensors = state.reference?.tensors || {};
-  const interesting = [
-    ["input", "Input"],
-    ["hidden_linear", "Hidden Pre-ReLU"],
-    ["hidden_relu", "Hidden Post-ReLU"],
-    ["logits", "Logits"],
-    ["output", "Output"],
-    ["expected_output", "Expected Output"],
-    ["w1", "Weights 1"],
-    ["w2", "Weights 2"],
-  ];
+  const tensors = state.reference?.tensors || [];
+  const activationCards = tensors.filter((tensor) => tensor.group === "activations" || tensor.group === "reference");
+  const parameterCards = tensors.filter((tensor) => tensor.group === "parameters");
 
-  document.getElementById("tensor-grid").innerHTML = interesting
-    .filter(([key]) => tensors[key])
-    .map(([key, label]) => {
-      const tensor = tensors[key];
-      const rows = tensor.values
-        .map(
-          (row) =>
-            `<tr>${row.map((value) => `<td>${Number(value).toFixed(4)}</td>`).join("")}</tr>`
-        )
-        .join("");
-      return `
-        <article class="tensor-card">
-          <h3>${label}</h3>
-          <p class="tensor-shape">shape: [${tensor.shape.join(", ")}]</p>
-          <p class="tensor-help">${tensorHelp[key] || ""}</p>
-          <table class="tensor-table"><tbody>${rows}</tbody></table>
-        </article>
-      `;
-    })
-    .join("");
+  const renderCards = (cards) =>
+    cards
+      .map((tensor) => {
+        const rows = tensor.values
+          .map(
+            (row) =>
+              `<tr>${row.map((value) => `<td>${Number(value).toFixed(4)}</td>`).join("")}</tr>`
+          )
+          .join("");
+        return `
+          <article class="tensor-card">
+            <h3>${tensor.label}</h3>
+            <p class="tensor-shape">shape: [${tensor.shape.join(", ")}]</p>
+            <p class="tensor-help">${tensor.description}</p>
+            <table class="tensor-table"><tbody>${rows}</tbody></table>
+          </article>
+        `;
+      })
+      .join("");
+
+  document.getElementById("activation-grid").innerHTML = renderCards(activationCards);
+  document.getElementById("parameter-grid").innerHTML = renderCards(parameterCards);
 }
 
 function renderGroupedBars(containerId, titleField, results, descriptionBuilder) {
@@ -175,7 +199,7 @@ function renderBenchmarks() {
     "case",
     benchmarks?.matmul_results || [],
     (groupName) =>
-      `This compares raw matrix multiplication for shape ${groupName}. Lower time means the kernel is faster for that problem size.`
+      `This compares raw matrix multiplication for shape ${groupName}. The three numbers mean rows x inner dimension x columns. Lower time means the kernel is faster for that problem size.`
   );
 
   renderGroupedBars(
@@ -184,7 +208,7 @@ function renderBenchmarks() {
     benchmarks?.model_results || [],
     (groupName, groupResults) => {
       const sample = groupResults[0];
-      return `This measures full inference for ${groupName}. Batch size ${sample.batch}, input width ${sample.input}, hidden width ${sample.hidden}, output width ${sample.output}. Lower time means the entire model runs faster.`;
+      return `This measures full inference for ${groupName}. Batch size ${sample.batch}, input width ${sample.input}, hidden width ${sample.hidden}, output width ${sample.output}. This is usually the most important performance view because it times the whole model, not just one isolated kernel.`;
     }
   );
 }
@@ -205,25 +229,49 @@ function showSummary() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function loadState() {
-  const payload = await fetchJson("/api/state");
-  state.reference = payload.reference;
-  state.benchmarks = payload.benchmarks;
+function renderAll() {
+  renderExampleSelectors();
   renderMetrics();
   renderArchitecture();
   renderTensors();
   renderBenchmarks();
 }
 
+async function loadState(exampleId = state.selectedExample) {
+  const query = exampleId ? `?example=${encodeURIComponent(exampleId)}` : "";
+  const payload = await fetchJson(`/api/state${query}`);
+  state.examples = payload.examples || [];
+  state.reference = payload.reference;
+  state.benchmarks = payload.benchmarks;
+  state.selectedExample = payload.reference?.example?.id || state.examples[0]?.id || null;
+  renderAll();
+}
+
+async function switchExample(exampleId) {
+  state.selectedExample = exampleId;
+  await loadState(exampleId);
+  setConsole("inference-output", "");
+}
+
 document.getElementById("open-playground").addEventListener("click", showPlayground);
 document.getElementById("back-to-summary").addEventListener("click", showSummary);
 
+document.getElementById("summary-example-select").addEventListener("change", async (event) => {
+  await switchExample(event.target.value);
+});
+
+document.getElementById("playground-example-select").addEventListener("change", async (event) => {
+  await switchExample(event.target.value);
+});
+
 document.getElementById("refresh-reference").addEventListener("click", async () => {
-  const payload = await fetchJson("/api/refresh-reference", { method: "POST", body: "{}" });
+  const payload = await fetchJson("/api/refresh-reference", {
+    method: "POST",
+    body: JSON.stringify({ example: state.selectedExample }),
+  });
+  state.examples = payload.examples || state.examples;
   state.reference = payload.reference;
-  renderMetrics();
-  renderArchitecture();
-  renderTensors();
+  renderAll();
   setConsole("inference-output", payload.command.stdout || payload.command.stderr);
 });
 
@@ -233,6 +281,7 @@ document.getElementById("inference-form").addEventListener("submit", async (even
   const payload = await fetchJson("/api/run-inference", {
     method: "POST",
     body: JSON.stringify({
+      example: state.selectedExample,
       backend: form.get("backend"),
       threads: Number(form.get("threads")),
     }),

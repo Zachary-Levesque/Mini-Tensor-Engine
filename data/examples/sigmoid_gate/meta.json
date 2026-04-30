@@ -1,0 +1,6 @@
+{
+  "id": "sigmoid_gate",
+  "title": "Sigmoid Gate",
+  "summary": "A compact example that uses Sigmoid to squash hidden activations into the 0 to 1 range.",
+  "interview_note": "This shows that the engine is no longer tied to ReLU-only manifests and can execute other nonlinearities."
+}

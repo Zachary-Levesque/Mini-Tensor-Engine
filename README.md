@@ -33,6 +33,7 @@ The UI phase is intended as the final presentation layer on top of the real engi
 - `tests`: lightweight C++ correctness tests
 - `python`: baseline inference and reference-data export scripts
 - `data/reference`: deterministic model weights, input, and expected output
+- `data/examples`: multiple sample model bundles used by the UI and flexible model demos
 
 ## Build
 
@@ -60,6 +61,7 @@ The dashboard opens with a simple project summary first, then lets the user move
 The UI shows:
 
 - a plain-language explanation of the project goal and why it matters
+- multiple sample models you can switch between
 - model architecture and tensor views
 - layer-by-layer inference flow
 - Python-reference validation status
@@ -76,7 +78,16 @@ Generate the deterministic Python reference tensors with:
 python3 python/export_reference.py
 ```
 
+This also generates multiple sample bundles under `data/examples`.
+
 The inference executable accepts `--data-dir <path>` if you want to point it at a different exported reference bundle.
+
+The Python baseline accepts the same pattern:
+
+```bash
+python3 python/baseline.py --data-dir data/examples/sigmoid_gate
+python3 python/baseline.py --data-dir data/examples/tanh_mixer
+```
 
 `mte_infer` also accepts `--backend naive|transpose_rhs|threaded_transpose_rhs` and `--threads <count>` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes, reports thread scaling, and measures both the small demo model and larger synthetic inference workloads.
 
