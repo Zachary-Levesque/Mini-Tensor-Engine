@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_DIR = ROOT / "data" / "reference"
 EXAMPLES_DIR = ROOT / "data" / "examples"
 
+# This script builds deterministic example model bundles for the project.
+# It also refreshes data/reference so the default C++ and UI demo paths stay in sync.
+
 
 def relu(x: np.ndarray) -> np.ndarray:
     return np.maximum(x, 0.0)
@@ -40,6 +43,7 @@ def write_tensor(path: Path, tensor: np.ndarray) -> None:
 
 
 def run_manifest(directory: Path, input_tensor: np.ndarray) -> np.ndarray:
+    # Reuse the manifest format directly so the generated output always matches the declared model.
     activations = input_tensor
     for raw_line in (directory / "model.txt").read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -230,6 +234,7 @@ def write_examples() -> None:
 
 
 def sync_default_reference() -> None:
+    # Keep one canonical default example for the main inference and UI flows.
     default_example = EXAMPLES_DIR / "relu_classifier"
     if REFERENCE_DIR.exists():
         shutil.rmtree(REFERENCE_DIR)
