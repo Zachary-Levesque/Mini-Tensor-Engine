@@ -121,11 +121,35 @@
                 <p class="panel-kicker">Run</p>
                 <h2>Inference Check</h2>
                 <p class="panel-copy">
-                  Use this to run the C++ engine yourself. `Backend` chooses which matrix
-                  multiplication implementation is used. `Threads` matters only for the threaded
-                  backend. The console will show the exact program output.
+                  Use this to run the C++ engine yourself and confirm that it works.
+                  The model computation is the same each time, but the internal matrix
+                  multiplication method can change.
                 </p>
               </div>
+            </div>
+            <div class="explain-block">
+              <h3>What is a backend?</h3>
+              <p>
+                A <strong>backend</strong> is the internal implementation the engine uses for
+                matrix multiplication. The math result should stay the same, but the speed can
+                change depending on how the computation is organized.
+              </p>
+              <ul class="summary-list">
+                <li><strong>`naive`</strong>: the simplest version, easiest to understand, slowest</li>
+                <li><strong>`transpose_rhs`</strong>: reorganizes memory access to be more cache-friendly</li>
+                <li><strong>`threaded_transpose_rhs`</strong>: same cache-friendly idea, but split across multiple threads</li>
+              </ul>
+              <h3>What is a thread?</h3>
+              <p>
+                A <strong>thread</strong> is one worker that the CPU can use to do part of the
+                job. More threads can make large computations faster by dividing the work, but
+                they also add overhead. That is why more threads are helpful for big workloads and
+                not always useful for tiny ones.
+              </p>
+              <p>
+                In this section, <strong>`Threads` only matters for the threaded backend</strong>.
+                If you choose `naive` or `transpose_rhs`, the engine still runs on one thread.
+              </p>
             </div>
             <form id="inference-form" class="control-stack">
               <label>
@@ -151,11 +175,27 @@
                 <p class="panel-kicker">Run</p>
                 <h2>Benchmark Runner</h2>
                 <p class="panel-copy">
-                  Use this to measure performance. `Iterations` controls how many times a workload
-                  is timed. `Warmup` runs the workload first without counting it. `Threads`
-                  controls which thread counts are tested for the threaded backend.
+                  Use this to measure performance and compare implementations. This section is for
+                  speed testing, not correctness testing.
                 </p>
               </div>
+            </div>
+            <div class="explain-block">
+              <h3>What does this benchmark do?</h3>
+              <p>
+                It measures how long the engine takes to run matrix multiplication and full model
+                inference. Lower time means faster execution.
+              </p>
+              <h3>What do these settings mean?</h3>
+              <ul class="summary-list">
+                <li><strong>`Iterations`</strong>: how many measured runs to perform. More iterations usually give a more stable average.</li>
+                <li><strong>`Warmup`</strong>: how many runs to do first without timing them. This helps avoid measuring startup effects.</li>
+                <li><strong>`Threads`</strong>: which thread counts to test for the threaded backend, for example `1,2,4`.</li>
+              </ul>
+              <p>
+                A good way to think about it: the benchmark is asking, <em>"How fast is this
+                engine under different implementations and different levels of parallel work?"</em>
+              </p>
             </div>
             <form id="benchmark-form" class="control-stack">
               <label>
@@ -181,12 +221,34 @@
                 <p class="panel-kicker">Reference</p>
                 <h2>Tensor Views</h2>
                 <p class="panel-copy">
-                  These are the most important tensors in the current pipeline. `Input` is what
-                  goes into the model. `Hidden Pre-ReLU` is the first linear layer output.
-                  `Hidden Post-ReLU` shows what remains after negative values are clamped to zero.
-                  `Logits` are the raw final scores. `Output` is the final normalized prediction.
+                  These are the main pieces of data that move through the model. A
+                  <strong>tensor</strong> is just a structured container of numbers. In this
+                  project, most tensors are simple 2D arrays, so you can think of them like
+                  matrices.
                 </p>
               </div>
+            </div>
+            <div class="explain-block">
+              <h3>How should you read this section?</h3>
+              <p>
+                Read the tensors in order:
+              </p>
+              <ol class="explain-steps">
+                <li><strong>Input</strong>: the numbers that enter the model</li>
+                <li><strong>Hidden Pre-ReLU</strong>: the first layer result before activation</li>
+                <li><strong>Hidden Post-ReLU</strong>: the same values after negative ones are removed</li>
+                <li><strong>Logits</strong>: the final raw scores before turning them into probabilities</li>
+                <li><strong>Output</strong>: the final probabilities</li>
+                <li><strong>Expected Output</strong>: the Python reference used to check correctness</li>
+              </ol>
+              <p>
+                The weight tensors are not predictions. They are the learned parameters the model
+                uses to transform the input.
+              </p>
+              <p>
+                When you see <strong>`shape: [1, 4]`</strong>, it means 1 row and 4 columns. For
+                example, `[1, 4]` means "one example with four input values."
+              </p>
             </div>
             <div id="tensor-grid" class="tensor-grid"></div>
           </section>
@@ -197,12 +259,29 @@
                 <p class="panel-kicker">Performance</p>
                 <h2>MatMul Results</h2>
                 <p class="panel-copy">
-                  These results compare raw matrix multiplication performance. Each card is one
-                  matrix shape. Shorter bars mean faster execution. This is useful for understanding
-                  the numerical kernel itself before looking at full model inference.
+                  These results compare raw matrix multiplication performance. This is the lowest
+                  level benchmark in the project.
                 </p>
               </div>
               <p id="benchmark-source" class="muted"></p>
+            </div>
+            <div class="explain-block">
+              <h3>What does a shape like `32x64x32` mean?</h3>
+              <p>
+                It means the engine is multiplying a matrix with shape <strong>32 x 64</strong>
+                by a matrix with shape <strong>64 x 32</strong>. The shared middle dimension is
+                64, and the result has shape <strong>32 x 32</strong>.
+              </p>
+              <h3>How do you read the result?</h3>
+              <p>
+                Each row is one implementation. The number on the right is the average runtime.
+                Lower is better. If one backend has a much smaller number, that backend is faster
+                for that matrix size.
+              </p>
+              <p>
+                This section helps answer: <em>"Which matrix multiplication implementation is
+                faster by itself?"</em>
+              </p>
             </div>
             <div id="matmul-chart" class="chart-grid"></div>
           </section>
@@ -215,9 +294,30 @@
                 <p class="panel-copy">
                   These results measure full inference workloads, not just isolated matrix
                   multiplication. This is the most important chart when you want to know whether an
-                  optimization actually helps the model as a whole.
+                  optimization helps the model as a whole.
                 </p>
               </div>
+            </div>
+            <div class="explain-block">
+              <h3>Why is this section more important than the raw matmul section?</h3>
+              <p>
+                Because a matrix multiplication trick can look fast in isolation but still fail to
+                help the full model if the overhead is too high. This section measures the entire
+                inference path from input to output.
+              </p>
+              <h3>What do names like `batch64_hidden256` mean?</h3>
+              <ul class="summary-list">
+                <li><strong>`batch64`</strong>: 64 examples are processed at once</li>
+                <li><strong>`hidden256`</strong>: the hidden layer width is 256</li>
+              </ul>
+              <p>
+                Larger cases are more realistic for performance testing. They are also where
+                threading tends to matter more.
+              </p>
+              <p>
+                This section helps answer: <em>"Does this optimization make the real model run
+                faster?"</em>
+              </p>
             </div>
             <div id="model-chart" class="chart-grid"></div>
           </section>
