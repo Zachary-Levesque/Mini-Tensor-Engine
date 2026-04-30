@@ -45,6 +45,26 @@ ctest --test-dir build
 ./build/mte_benchmark --iterations 200 --warmup 20 --threads 1,2,4,8 --csv-out build/results.csv --json-out build/results.json
 ```
 
+## UI Demo
+
+Run the local dashboard with:
+
+```bash
+python3 ui/server.py
+```
+
+Then open `http://127.0.0.1:8000` in your browser.
+
+The dashboard shows:
+
+- model architecture and tensor views
+- layer-by-layer inference flow
+- Python-reference validation status
+- inference execution controls for different backends and thread counts
+- benchmark controls and visual summaries
+
+The UI reads the existing reference tensors and latest benchmark JSON output, and it can also trigger fresh inference and benchmark runs locally.
+
 ## Reference Data
 
 Generate the deterministic Python reference tensors with:
