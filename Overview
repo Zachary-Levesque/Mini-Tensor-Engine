@@ -21,6 +21,7 @@ This project must help me demonstrate:
 - Understanding of ML inference internals
 - Ability to build complex systems from scratch
 - Clean architecture and engineering discipline
+- Ability to present technical systems clearly through a polished demo interface
 
 ---
 
@@ -34,6 +35,7 @@ I will build a complete ML inference engine in stages:
 4. C++ multithreaded version
 5. Optional: SIMD / Apple Metal
 6. Benchmarking and performance analysis
+7. Clean visualization UI for inference flow, correctness comparison, and performance results
 
 ---
 

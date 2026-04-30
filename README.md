@@ -14,6 +14,17 @@ The initial milestone is correctness-first:
 - C++ inference executable with configurable reference-data path
 - separate benchmark executable for backend comparison and latency measurement
 
+## Roadmap
+
+The project has completed the first correctness-first and early optimization stages. The next major phases are:
+
+- multithreaded matrix multiplication and thread-scaling benchmarks
+- broader benchmark suites and deeper performance analysis
+- additional model and layer support
+- a clean visualization UI for inference flow, correctness checks, and benchmark results
+
+The UI phase is intended as the final presentation layer on top of the real engine so the project is both technically strong and easy to demo.
+
 ## Layout
 
 - `include/mte`: public headers
