@@ -42,6 +42,7 @@ cmake --build build
 ctest --test-dir build
 ./build/mte_infer --backend threaded_transpose_rhs --threads 4
 ./build/mte_benchmark --iterations 200 --warmup 20 --threads 1,2,4,8
+./build/mte_benchmark --iterations 200 --warmup 20 --threads 1,2,4,8 --csv-out build/results.csv --json-out build/results.json
 ```
 
 ## Reference Data
@@ -55,3 +56,8 @@ python3 python/export_reference.py
 The inference executable accepts `--data-dir <path>` if you want to point it at a different exported reference bundle.
 
 `mte_infer` also accepts `--backend naive|transpose_rhs|threaded_transpose_rhs` and `--threads <count>` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes, reports thread scaling, and measures both the small demo model and larger synthetic inference workloads.
+
+`mte_benchmark` also accepts:
+
+- `--csv-out <path>` to export all benchmark rows as CSV
+- `--json-out <path>` to export structured benchmark data for future UI or analysis tooling

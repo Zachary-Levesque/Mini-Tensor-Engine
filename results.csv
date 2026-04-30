@@ -1,0 +1,13 @@
+section,case,batch,input,hidden,output,backend,threads,avg_ns
+matmul,32x64x32,,,,,naive,1,2031417.00
+matmul,32x64x32,,,,,transpose_rhs,1,488250.00
+matmul,32x64x32,,,,,threaded_transpose_rhs,1,486959.00
+matmul,64x64x64,,,,,naive,1,8061166.00
+matmul,64x64x64,,,,,transpose_rhs,1,1729833.00
+matmul,64x64x64,,,,,threaded_transpose_rhs,1,1722292.00
+matmul,128x128x128,,,,,naive,1,63903250.00
+matmul,128x128x128,,,,,transpose_rhs,1,12811459.00
+matmul,128x128x128,,,,,threaded_transpose_rhs,1,12770167.00
+matmul,256x256x256,,,,,naive,1,513156916.00
+matmul,256x256x256,,,,,transpose_rhs,1,98634500.00
+matmul,256x256x256,,,,,threaded_transpose_rhs,1,98719000.00
