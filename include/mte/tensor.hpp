@@ -8,6 +8,11 @@
 
 namespace mte {
 
+enum class MatMulBackend {
+    kNaive,
+    kTransposeRhs,
+};
+
 class Tensor {
 public:
     Tensor() = default;
@@ -39,7 +44,11 @@ private:
 };
 
 Tensor MatMul(const Tensor& lhs, const Tensor& rhs);
+Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend);
+Tensor Transpose(const Tensor& input);
+Tensor MatMulWithPretransposedRhs(const Tensor& lhs, const Tensor& rhs_transposed);
 Tensor AddBias(const Tensor& input, const Tensor& bias);
 bool HasSameShape(const Tensor& lhs, const Tensor& rhs) noexcept;
+const char* MatMulBackendName(MatMulBackend backend) noexcept;
 
 }  // namespace mte

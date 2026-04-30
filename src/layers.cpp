@@ -7,7 +7,15 @@
 namespace mte {
 
 Tensor Linear(const Tensor& input, const Tensor& weights, const Tensor& bias) {
-    return AddBias(MatMul(input, weights), bias);
+    return Linear(input, weights, bias, MatMulBackend::kTransposeRhs);
+}
+
+Tensor Linear(
+    const Tensor& input,
+    const Tensor& weights,
+    const Tensor& bias,
+    MatMulBackend backend) {
+    return AddBias(MatMul(input, weights, backend), bias);
 }
 
 Tensor ReLU(const Tensor& input) {

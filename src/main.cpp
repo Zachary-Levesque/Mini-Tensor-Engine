@@ -16,7 +16,18 @@ bool AlmostEqual(float lhs, float rhs, float tolerance = 1e-5F) {
 
 struct Options {
     std::filesystem::path data_dir = "data/reference";
+    mte::MatMulBackend backend = mte::MatMulBackend::kTransposeRhs;
 };
+
+[[nodiscard]] mte::MatMulBackend ParseBackend(std::string_view value) {
+    if (value == "naive") {
+        return mte::MatMulBackend::kNaive;
+    }
+    if (value == "transpose_rhs") {
+        return mte::MatMulBackend::kTransposeRhs;
+    }
+    throw std::invalid_argument("unknown backend: " + std::string(value));
+}
 
 Options ParseArgs(int argc, char** argv) {
     Options options;
@@ -28,6 +39,13 @@ Options ParseArgs(int argc, char** argv) {
                 throw std::invalid_argument("--data-dir requires a value");
             }
             options.data_dir = argv[++i];
+            continue;
+        }
+        if (arg == "--backend") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--backend requires a value");
+            }
+            options.backend = ParseBackend(argv[++i]);
             continue;
         }
         throw std::invalid_argument("unknown argument: " + std::string(arg));
@@ -74,9 +92,10 @@ int main(int argc, char** argv) {
         const Options options = ParseArgs(argc, argv);
         const mte::ReferenceCase reference_case = mte::LoadReferenceCase(options.data_dir);
         const mte::TwoLayerPerceptron model =
-            mte::TwoLayerPerceptron::LoadFromDirectory(options.data_dir);
+            mte::TwoLayerPerceptron::LoadFromDirectory(options.data_dir, options.backend);
         const mte::Tensor output = model.Forward(reference_case.input);
 
+        std::cout << "Backend: " << mte::MatMulBackendName(model.backend()) << '\n';
         PrintTensor(output, "C++ output");
 
         if (!MatchesWithinTolerance(output, reference_case.expected_output)) {

@@ -20,13 +20,27 @@ void ValidateLinearLayer(const Tensor& weights, const Tensor& bias, const char* 
 
 }  // namespace
 
-TwoLayerPerceptron::TwoLayerPerceptron(Tensor w1, Tensor b1, Tensor w2, Tensor b2)
-    : w1_(std::move(w1)), b1_(std::move(b1)), w2_(std::move(w2)), b2_(std::move(b2)) {
+TwoLayerPerceptron::TwoLayerPerceptron(
+    Tensor w1,
+    Tensor b1,
+    Tensor w2,
+    Tensor b2,
+    MatMulBackend backend)
+    : w1_(std::move(w1)),
+      b1_(std::move(b1)),
+      w2_(std::move(w2)),
+      b2_(std::move(b2)),
+      backend_(backend) {
     ValidateLinearLayer(w1_, b1_, "layer1");
     ValidateLinearLayer(w2_, b2_, "layer2");
 
     if (w1_.cols() != w2_.rows()) {
         throw std::invalid_argument("layer1 output width must match layer2 input width");
+    }
+
+    if (backend_ == MatMulBackend::kTransposeRhs) {
+        w1_transposed_ = Transpose(w1_);
+        w2_transposed_ = Transpose(w2_);
     }
 }
 
@@ -38,17 +52,37 @@ Tensor TwoLayerPerceptron::Forward(const Tensor& input) const {
         throw std::invalid_argument("input width does not match first layer input width");
     }
 
-    const Tensor hidden = ReLU(Linear(input, w1_, b1_));
-    return Softmax(Linear(hidden, w2_, b2_));
+    const Tensor hidden = ReLU(ApplyFirstLinear(input));
+    return Softmax(ApplySecondLinear(hidden));
+}
+
+MatMulBackend TwoLayerPerceptron::backend() const noexcept {
+    return backend_;
+}
+
+Tensor TwoLayerPerceptron::ApplyFirstLinear(const Tensor& input) const {
+    if (backend_ == MatMulBackend::kTransposeRhs) {
+        return AddBias(MatMulWithPretransposedRhs(input, w1_transposed_), b1_);
+    }
+    return Linear(input, w1_, b1_, backend_);
+}
+
+Tensor TwoLayerPerceptron::ApplySecondLinear(const Tensor& input) const {
+    if (backend_ == MatMulBackend::kTransposeRhs) {
+        return AddBias(MatMulWithPretransposedRhs(input, w2_transposed_), b2_);
+    }
+    return Linear(input, w2_, b2_, backend_);
 }
 
 TwoLayerPerceptron TwoLayerPerceptron::LoadFromDirectory(
-    const std::filesystem::path& directory) {
+    const std::filesystem::path& directory,
+    MatMulBackend backend) {
     return TwoLayerPerceptron(
         LoadTensorFromTextFile(directory / "w1.txt"),
         LoadTensorFromTextFile(directory / "b1.txt"),
         LoadTensorFromTextFile(directory / "w2.txt"),
-        LoadTensorFromTextFile(directory / "b2.txt"));
+        LoadTensorFromTextFile(directory / "b2.txt"),
+        backend);
 }
 
 }  // namespace mte

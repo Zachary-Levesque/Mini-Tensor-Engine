@@ -1,18 +1,18 @@
 # Mini-Tensor-Engine
 
-High-performance ML inference engine in C++ with a custom tensor implementation, baseline matrix multiplication, simple neural-network layers, a minimal model abstraction, and validation against a Python reference pipeline.
+High-performance ML inference engine in C++ with a custom tensor implementation, multiple matrix-multiplication backends, simple neural-network layers, a minimal model abstraction, and validation against a Python reference pipeline.
 
 ## Current Scope
 
 The initial milestone is correctness-first:
 
 - contiguous rank-2 tensor storage
-- naive CPU matrix multiplication
+- naive and cache-friendlier CPU matrix multiplication backends
 - `Linear`, `ReLU`, and `Softmax` layers
 - a reusable two-layer MLP model object
 - Python-generated reference weights and outputs
 - C++ inference executable with configurable reference-data path
-- separate benchmark executable for latency measurement
+- separate benchmark executable for backend comparison and latency measurement
 
 ## Layout
 
@@ -29,8 +29,8 @@ The initial milestone is correctness-first:
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build
-./build/mte_infer
-./build/mte_benchmark --iterations 100000
+./build/mte_infer --backend transpose_rhs
+./build/mte_benchmark --iterations 200 --warmup 20
 ```
 
 ## Reference Data
@@ -42,3 +42,5 @@ python3 python/export_reference.py
 ```
 
 The inference executable accepts `--data-dir <path>` if you want to point it at a different exported reference bundle.
+
+`mte_infer` also accepts `--backend naive|transpose_rhs` to validate different matrix-multiplication implementations. `mte_benchmark` compares those backends on several matrix sizes and a small end-to-end model path.

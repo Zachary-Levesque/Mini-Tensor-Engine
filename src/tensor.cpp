@@ -1,6 +1,7 @@
 #include "mte/tensor.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 #include <sstream>
 
@@ -103,13 +104,19 @@ std::size_t Tensor::ComputeSize(const std::vector<std::size_t>& shape) {
         shape.begin(), shape.end(), std::size_t{1}, std::multiplies<std::size_t>());
 }
 
-Tensor MatMul(const Tensor& lhs, const Tensor& rhs) {
+namespace {
+
+void ValidateMatMulInputs(const Tensor& lhs, const Tensor& rhs) {
     if (lhs.rank() != 2 || rhs.rank() != 2) {
         throw std::invalid_argument("MatMul currently supports only rank-2 tensors");
     }
     if (lhs.cols() != rhs.rows()) {
         throw std::invalid_argument("MatMul shape mismatch");
     }
+}
+
+Tensor MatMulNaive(const Tensor& lhs, const Tensor& rhs) {
+    ValidateMatMulInputs(lhs, rhs);
 
     const std::size_t rows = lhs.rows();
     const std::size_t inner = lhs.cols();
@@ -126,6 +133,73 @@ Tensor MatMul(const Tensor& lhs, const Tensor& rhs) {
         }
     }
     return output;
+}
+
+Tensor MatMulTransposeRhs(const Tensor& lhs, const Tensor& rhs) {
+    ValidateMatMulInputs(lhs, rhs);
+
+    return MatMulWithPretransposedRhs(lhs, Transpose(rhs));
+}
+
+}  // namespace
+
+Tensor Transpose(const Tensor& input) {
+    if (input.rank() != 2) {
+        throw std::invalid_argument("Transpose currently supports only rank-2 tensors");
+    }
+
+    Tensor output({input.cols(), input.rows()});
+    for (std::size_t row = 0; row < input.rows(); ++row) {
+        for (std::size_t col = 0; col < input.cols(); ++col) {
+            output.at(col, row) = input.at(row, col);
+        }
+    }
+    return output;
+}
+
+Tensor MatMulWithPretransposedRhs(const Tensor& lhs, const Tensor& rhs_transposed) {
+    if (lhs.rank() != 2 || rhs_transposed.rank() != 2) {
+        throw std::invalid_argument(
+            "MatMulWithPretransposedRhs currently supports only rank-2 tensors");
+    }
+
+    const std::size_t rows = lhs.rows();
+    const std::size_t inner = lhs.cols();
+    const std::size_t cols = rhs_transposed.rows();
+
+    if (rhs_transposed.cols() != inner) {
+        throw std::invalid_argument("pretransposed rhs shape mismatch");
+    }
+
+    Tensor output({rows, cols});
+    for (std::size_t row = 0; row < rows; ++row) {
+        for (std::size_t col = 0; col < cols; ++col) {
+            const float* lhs_row = lhs.data().data() + (row * inner);
+            const float* rhs_row = rhs_transposed.data().data() + (col * inner);
+
+            float sum = 0.0F;
+            for (std::size_t k = 0; k < inner; ++k) {
+                sum += lhs_row[k] * rhs_row[k];
+            }
+            output.at(row, col) = sum;
+        }
+    }
+    return output;
+}
+
+Tensor MatMul(const Tensor& lhs, const Tensor& rhs) {
+    return MatMul(lhs, rhs, MatMulBackend::kTransposeRhs);
+}
+
+Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend) {
+    switch (backend) {
+        case MatMulBackend::kNaive:
+            return MatMulNaive(lhs, rhs);
+        case MatMulBackend::kTransposeRhs:
+            return MatMulTransposeRhs(lhs, rhs);
+    }
+
+    throw std::invalid_argument("unknown MatMul backend");
 }
 
 Tensor AddBias(const Tensor& input, const Tensor& bias) {
@@ -147,6 +221,16 @@ Tensor AddBias(const Tensor& input, const Tensor& bias) {
 
 bool HasSameShape(const Tensor& lhs, const Tensor& rhs) noexcept {
     return lhs.shape() == rhs.shape();
+}
+
+const char* MatMulBackendName(MatMulBackend backend) noexcept {
+    switch (backend) {
+        case MatMulBackend::kNaive:
+            return "naive";
+        case MatMulBackend::kTransposeRhs:
+            return "transpose_rhs";
+    }
+    return "unknown";
 }
 
 }  // namespace mte
