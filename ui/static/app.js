@@ -3,6 +3,17 @@ const state = {
   benchmarks: null,
 };
 
+const tensorHelp = {
+  input: "This is the data that goes into the model.",
+  hidden_linear: "This is the first linear layer output before ReLU is applied.",
+  hidden_relu: "This is the hidden layer after all negative values are clamped to zero.",
+  logits: "These are the raw final scores before Softmax normalization.",
+  output: "This is the final prediction after Softmax. The values sum to 1.",
+  expected_output: "This is the stored Python reference output used for correctness checking.",
+  w1: "These are the first layer weights used by the model.",
+  w2: "These are the second layer weights used by the model.",
+};
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -16,15 +27,9 @@ async function fetchJson(url, options = {}) {
 }
 
 function formatNumber(value) {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "n/a";
-  }
-  if (Math.abs(value) >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)} ms`;
-  }
-  if (Math.abs(value) >= 1_000) {
-    return `${(value / 1_000).toFixed(2)} μs`;
-  }
+  if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} ms`;
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(2)} μs`;
   return `${value.toFixed(2)} ns`;
 }
 
@@ -43,11 +48,11 @@ function renderMetrics() {
       value: validation?.matches_reference ? "Verified" : "Needs review",
     },
     {
-      label: "Max Output Diff",
-      value: validation ? validation.max_abs_diff.toExponential(2) : "n/a",
+      label: "What It Runs",
+      value: "Linear → ReLU → Linear → Softmax",
     },
     {
-      label: "Best Model Run",
+      label: "Fastest Current Model Run",
       value: bestModel ? `${bestModel.case} · ${formatNumber(bestModel.avg_ns)}` : "No benchmark yet",
     },
   ];
@@ -73,9 +78,14 @@ function renderArchitecture() {
   const validation = state.reference?.validation;
   const className = validation?.matches_reference ? "validation-good" : "validation-bad";
   document.getElementById("validation-card").innerHTML = `
-    <h3 class="${className}">${validation?.matches_reference ? "C++ output matches Python reference" : "Reference mismatch detected"}</h3>
+    <h3 class="${className}">
+      ${validation?.matches_reference ? "The C++ engine matches the Python reference output." : "The current output does not match the Python reference."}
+    </h3>
     <p class="muted">Max absolute difference: ${validation ? validation.max_abs_diff.toExponential(3) : "n/a"}</p>
-    <p class="muted">The dashboard computes the same layer-by-layer path as the exported Python reference and compares it against the stored expected output.</p>
+    <p class="muted">
+      This matters because correctness comes first. Performance improvements are only useful if the
+      engine still produces the same answer as the trusted Python path.
+    </p>
   `;
 }
 
@@ -106,6 +116,7 @@ function renderTensors() {
         <article class="tensor-card">
           <h3>${label}</h3>
           <p class="tensor-shape">shape: [${tensor.shape.join(", ")}]</p>
+          <p class="tensor-help">${tensorHelp[key] || ""}</p>
           <table class="tensor-table"><tbody>${rows}</tbody></table>
         </article>
       `;
@@ -113,10 +124,10 @@ function renderTensors() {
     .join("");
 }
 
-function renderGroupedBars(containerId, titleField, results) {
+function renderGroupedBars(containerId, titleField, results, descriptionBuilder) {
   const container = document.getElementById(containerId);
   if (!results.length) {
-    container.innerHTML = `<p class="muted">No benchmark data available yet. Run the benchmark from the panel above.</p>`;
+    container.innerHTML = `<p class="muted">No benchmark data is loaded yet. Run the benchmark to populate this section.</p>`;
     return;
   }
 
@@ -135,14 +146,20 @@ function renderGroupedBars(containerId, titleField, results) {
           const percent = maxValue === 0 ? 0 : (result.avg_ns / maxValue) * 100;
           return `
             <div class="bar-row">
-              <div class="bar-label">${result.backend}${result.threads > 1 ? ` · ${result.threads}t` : ""}</div>
+              <div class="bar-label">${result.backend}${result.threads > 1 ? ` · ${result.threads} threads` : " · 1 thread"}</div>
               <div class="bar-track"><div class="bar-fill" style="width:${percent}%"></div></div>
               <div class="bar-value">${formatNumber(result.avg_ns)}</div>
             </div>
           `;
         })
         .join("");
-      return `<article class="chart-card"><h3>${groupName}</h3><div class="chart-bars">${rows}</div></article>`;
+      return `
+        <article class="chart-card">
+          <h3>${groupName}</h3>
+          <p class="chart-help">${descriptionBuilder(groupName, groupResults)}</p>
+          <div class="chart-bars">${rows}</div>
+        </article>
+      `;
     })
     .join("");
 }
@@ -153,12 +170,39 @@ function renderBenchmarks() {
     ? `Loaded from ${benchmarks.source_path}`
     : "No benchmark file loaded";
 
-  renderGroupedBars("matmul-chart", "case", benchmarks?.matmul_results || []);
-  renderGroupedBars("model-chart", "case", benchmarks?.model_results || []);
+  renderGroupedBars(
+    "matmul-chart",
+    "case",
+    benchmarks?.matmul_results || [],
+    (groupName) =>
+      `This compares raw matrix multiplication for shape ${groupName}. Lower time means the kernel is faster for that problem size.`
+  );
+
+  renderGroupedBars(
+    "model-chart",
+    "case",
+    benchmarks?.model_results || [],
+    (groupName, groupResults) => {
+      const sample = groupResults[0];
+      return `This measures full inference for ${groupName}. Batch size ${sample.batch}, input width ${sample.input}, hidden width ${sample.hidden}, output width ${sample.output}. Lower time means the entire model runs faster.`;
+    }
+  );
 }
 
 function setConsole(id, text) {
   document.getElementById(id).textContent = text || "";
+}
+
+function showPlayground() {
+  document.getElementById("intro-shell").classList.add("hidden");
+  document.getElementById("playground").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showSummary() {
+  document.getElementById("playground").classList.add("hidden");
+  document.getElementById("intro-shell").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 async function loadState() {
@@ -170,6 +214,9 @@ async function loadState() {
   renderTensors();
   renderBenchmarks();
 }
+
+document.getElementById("open-playground").addEventListener("click", showPlayground);
+document.getElementById("back-to-summary").addEventListener("click", showSummary);
 
 document.getElementById("refresh-reference").addEventListener("click", async () => {
   const payload = await fetchJson("/api/refresh-reference", { method: "POST", body: "{}" });
