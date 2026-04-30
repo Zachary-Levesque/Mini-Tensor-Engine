@@ -18,6 +18,14 @@ def relu(x: np.ndarray) -> np.ndarray:
     return np.maximum(x, 0.0)
 
 
+def sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def tanh(x: np.ndarray) -> np.ndarray:
+    return np.tanh(x)
+
+
 def softmax(x: np.ndarray) -> np.ndarray:
     shifted = x - np.max(x, axis=1, keepdims=True)
     exp_values = np.exp(shifted)
@@ -48,6 +56,10 @@ def run_model_from_manifest(input_tensor: np.ndarray) -> np.ndarray:
             activations = activations @ weights + bias
         elif layer_type == "relu":
             activations = relu(activations)
+        elif layer_type == "sigmoid":
+            activations = sigmoid(activations)
+        elif layer_type == "tanh":
+            activations = tanh(activations)
         elif layer_type == "softmax":
             activations = softmax(activations)
         else:
