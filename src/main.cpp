@@ -102,8 +102,8 @@ int main(int argc, char** argv) {
     try {
         const Options options = ParseArgs(argc, argv);
         const mte::ReferenceCase reference_case = mte::LoadReferenceCase(options.data_dir);
-        const mte::TwoLayerPerceptron model =
-            mte::TwoLayerPerceptron::LoadFromDirectory(
+        const mte::FeedForwardModel model =
+            mte::FeedForwardModel::LoadFromDirectory(
                 options.data_dir, options.backend, options.num_threads);
         const mte::Tensor output = model.Forward(reference_case.input);
 
