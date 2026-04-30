@@ -72,6 +72,20 @@ std::vector<LayerDefinition> LoadLayerDefinitionsFromManifest(
             layers.push_back(LayerDefinition{LayerType::kReLU, {}, {}, {}});
             continue;
         }
+        if (tokens[0] == "sigmoid") {
+            if (tokens.size() != 1) {
+                throw std::runtime_error("sigmoid manifest entry must not take arguments");
+            }
+            layers.push_back(LayerDefinition{LayerType::kSigmoid, {}, {}, {}});
+            continue;
+        }
+        if (tokens[0] == "tanh") {
+            if (tokens.size() != 1) {
+                throw std::runtime_error("tanh manifest entry must not take arguments");
+            }
+            layers.push_back(LayerDefinition{LayerType::kTanh, {}, {}, {}});
+            continue;
+        }
         if (tokens[0] == "softmax") {
             if (tokens.size() != 1) {
                 throw std::runtime_error("softmax manifest entry must not take arguments");
@@ -175,6 +189,12 @@ Tensor FeedForwardModel::Forward(const Tensor& input) const {
                 break;
             case LayerType::kReLU:
                 activations = ReLU(activations);
+                break;
+            case LayerType::kSigmoid:
+                activations = Sigmoid(activations);
+                break;
+            case LayerType::kTanh:
+                activations = Tanh(activations);
                 break;
             case LayerType::kSoftmax:
                 activations = Softmax(activations);

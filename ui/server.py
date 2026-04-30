@@ -26,6 +26,14 @@ ALLOWED_BACKENDS = {
     "threaded_transpose_rhs",
 }
 
+LAYER_LABELS = {
+    "linear": "Linear",
+    "relu": "ReLU",
+    "sigmoid": "Sigmoid",
+    "tanh": "Tanh",
+    "softmax": "Softmax",
+}
+
 
 def read_tensor(path: Path) -> np.ndarray:
     with path.open("r", encoding="utf-8") as handle:
@@ -47,6 +55,29 @@ def softmax(x: np.ndarray) -> np.ndarray:
     return exp_values / np.sum(exp_values, axis=1, keepdims=True)
 
 
+def load_model_architecture() -> dict[str, Any]:
+    manifest_path = REFERENCE_DIR / "model.txt"
+    if not manifest_path.exists():
+        return {
+            "name": "FeedForwardModel",
+            "flow": ["Input", "Linear", "ReLU", "Linear", "Softmax"],
+        }
+
+    flow = ["Input"]
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            layer_name = line.split()[0].lower()
+            flow.append(LAYER_LABELS.get(layer_name, layer_name.title()))
+
+    return {
+        "name": "FeedForwardModel",
+        "flow": flow,
+    }
+
+
 def load_reference_payload() -> dict[str, Any]:
     input_tensor = read_tensor(REFERENCE_DIR / "input.txt")
     w1 = read_tensor(REFERENCE_DIR / "w1.txt")
@@ -62,10 +93,7 @@ def load_reference_payload() -> dict[str, Any]:
     max_abs_diff = float(np.max(np.abs(output - expected_output)))
 
     return {
-        "architecture": {
-            "name": "TwoLayerPerceptron",
-            "flow": ["Input", "Linear", "ReLU", "Linear", "Softmax"],
-        },
+        "architecture": load_model_architecture(),
         "tensors": {
             "input": tensor_payload(input_tensor),
             "w1": tensor_payload(w1),
@@ -134,8 +162,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "project": {
                         "title": "Mini Tensor Engine",
                         "summary": (
-                            "Custom C++ inference engine with tensor storage, multiple matmul "
-                            "backends, validation against Python, and benchmark-driven optimization."
+                            "Custom C++ inference engine with tensor storage, a manifest-driven "
+                            "feed-forward model, multiple matmul backends, validation against "
+                            "Python, and benchmark-driven optimization."
                         ),
                     },
                     "reference": load_reference_payload(),

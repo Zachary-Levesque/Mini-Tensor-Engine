@@ -56,6 +56,16 @@ int main() {
         Expect(AlmostEqual(relu_output.at(0, 0), 0.0F), "relu mismatch at 0");
         Expect(AlmostEqual(relu_output.at(0, 2), 2.5F), "relu mismatch at 2");
 
+        mte::Tensor sigmoid_input({1, 2}, {0.0F, 2.0F});
+        mte::Tensor sigmoid_output = mte::Sigmoid(sigmoid_input);
+        Expect(AlmostEqual(sigmoid_output.at(0, 0), 0.5F), "sigmoid mismatch at 0");
+        Expect(AlmostEqual(sigmoid_output.at(0, 1), 0.880797F, 1e-5F), "sigmoid mismatch at 1");
+
+        mte::Tensor tanh_input({1, 2}, {0.0F, 1.0F});
+        mte::Tensor tanh_output = mte::Tanh(tanh_input);
+        Expect(AlmostEqual(tanh_output.at(0, 0), 0.0F), "tanh mismatch at 0");
+        Expect(AlmostEqual(tanh_output.at(0, 1), 0.761594F, 1e-5F), "tanh mismatch at 1");
+
         mte::Tensor softmax_input({1, 3}, {1.0F, 2.0F, 3.0F});
         mte::Tensor softmax_output = mte::Softmax(softmax_input);
         float sum = 0.0F;
@@ -116,6 +126,33 @@ int main() {
         Expect(AlmostEqual(output.at(0, 2), 0.127239F, 1e-4F), "model mismatch at 2");
         ExpectTensorClose(output, optimized_output, 1e-6F, "model backend mismatch");
         ExpectTensorClose(output, threaded_output, 1e-6F, "threaded model mismatch");
+
+        const mte::FeedForwardModel nonlinear_model(
+            {
+                {mte::LayerType::kLinear,
+                 mte::Tensor({2, 2}, {1.0F, -1.0F, 0.5F, 0.25F}),
+                 mte::Tensor({1, 2}, {0.1F, -0.2F}),
+                 {}},
+                {mte::LayerType::kSigmoid, {}, {}, {}},
+                {mte::LayerType::kLinear,
+                 mte::Tensor({2, 2}, {0.3F, 0.7F, -0.4F, 0.2F}),
+                 mte::Tensor({1, 2}, {0.05F, -0.05F}),
+                 {}},
+                {mte::LayerType::kTanh, {}, {}, {}},
+                {mte::LayerType::kSoftmax, {}, {}, {}},
+            },
+            mte::MatMulBackend::kTransposeRhs,
+            1);
+
+        const mte::Tensor nonlinear_input({1, 2}, {0.5F, -1.0F});
+        const mte::Tensor nonlinear_output = nonlinear_model.Forward(nonlinear_input);
+        float nonlinear_sum = 0.0F;
+        for (float value : nonlinear_output.data()) {
+            nonlinear_sum += value;
+        }
+        Expect(AlmostEqual(nonlinear_sum, 1.0F), "nonlinear model output must sum to 1");
+        Expect(nonlinear_output.at(0, 0) > 0.0F, "nonlinear model output must be positive");
+        Expect(nonlinear_output.at(0, 1) > 0.0F, "nonlinear model output must be positive");
 
         const std::filesystem::path scratch_dir = "build/test_output";
         mte::SaveTensorToTextFile(output, scratch_dir / "roundtrip.txt");
