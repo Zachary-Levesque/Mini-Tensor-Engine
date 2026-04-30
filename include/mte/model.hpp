@@ -10,6 +10,8 @@ namespace mte {
 enum class LayerType {
     kLinear,
     kReLU,
+    kSigmoid,
+    kTanh,
     kSoftmax,
 };
 
