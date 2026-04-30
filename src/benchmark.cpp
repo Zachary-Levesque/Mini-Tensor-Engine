@@ -280,7 +280,7 @@ struct ModelData {
 
 struct ModelBundle {
     mte::Tensor input;
-    mte::TwoLayerPerceptron model;
+    mte::FeedForwardModel model;
 };
 
 ModelData MakeSyntheticModelData(const ModelCase& model_case, std::mt19937& generator) {
@@ -309,7 +309,7 @@ ModelBundle MakeSyntheticModel(
     std::size_t num_threads) {
     return ModelBundle{
         model_data.input,
-        mte::TwoLayerPerceptron(
+        mte::FeedForwardModel::MakeTwoLayerPerceptron(
             model_data.w1,
             model_data.b1,
             model_data.w2,
