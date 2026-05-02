@@ -56,15 +56,6 @@ So this project connects machine learning with systems programming and performan
 
 One important result is that threading helps big workloads much more than tiny ones, because extra threads also add overhead.
 
-## Why It Is Useful
-
-This project is useful because it shows:
-
-- real C++ systems work
-- correctness-first engineering
-- measurable performance improvement
-- a complete project that is also easy to present
-
 ## Main Folders
 
 - `src`: C++ engine, inference CLI, benchmark CLI
