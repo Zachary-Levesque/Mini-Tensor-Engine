@@ -35,6 +35,16 @@ Most ML tools hide the low-level details. This project shows what happens undern
 
 So this project connects machine learning with systems programming and performance engineering.
 
+## Key Concepts
+
+- **C++ Systems Programming**: custom tensor structure, memory layout, modular design  
+- **Performance Engineering**: cache-aware optimization, benchmarking, kernel vs end-to-end tradeoffs  
+- **Parallel Computing**: multithreaded matrix multiplication, scalability considerations  
+- **ML Infrastructure**: inference pipeline, forward-pass execution, layer abstractions  
+- **Numerical Computing**: matrix multiplication, floating-point correctness, validation  
+- **Systems + ML Integration**: Python ↔ C++ verification, precomputation (cached weights)  
+- **Benchmarking Discipline**: backend comparison, performance measurement, regression safety
+
 ## What Was Built
 
 - a custom rank-2 `Tensor` class
