@@ -42,6 +42,8 @@ int main() {
         mte::Tensor optimized_product = mte::MatMul(lhs, rhs, mte::MatMulBackend::kTransposeRhs);
         mte::Tensor threaded_product =
             mte::MatMul(lhs, rhs, mte::MatMulBackend::kThreadedTransposeRhs, 2);
+        mte::Tensor tiled_product =
+            mte::MatMulTiledTransposeRhs(lhs, rhs, 2);
 
         Expect(product.shape()[0] == 2 && product.shape()[1] == 2, "matmul shape mismatch");
         Expect(AlmostEqual(product.at(0, 0), 58.0F), "matmul value mismatch (0,0)");
@@ -50,6 +52,7 @@ int main() {
         Expect(AlmostEqual(product.at(1, 1), 154.0F), "matmul value mismatch (1,1)");
         ExpectTensorClose(product, optimized_product, 1e-6F, "backend mismatch");
         ExpectTensorClose(product, threaded_product, 1e-6F, "threaded backend mismatch");
+        ExpectTensorClose(product, tiled_product, 1e-6F, "tiled backend mismatch");
 
         mte::Tensor relu_input({1, 4}, {-1.0F, 0.0F, 2.5F, -3.0F});
         mte::Tensor relu_output = mte::ReLU(relu_input);

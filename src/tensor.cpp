@@ -278,6 +278,39 @@ Tensor MatMulWithPretransposedRhs(
     return output;
 }
 
+Tensor MatMulTiledTransposeRhs(
+    const Tensor& lhs,
+    const Tensor& rhs,
+    std::size_t tile_size) {
+    ValidateMatMulInputs(lhs, rhs);
+    if (tile_size == 0) {
+        throw std::invalid_argument("tile_size must be greater than 0");
+    }
+
+    const Tensor rhs_transposed = Transpose(rhs);
+    const std::size_t rows = lhs.rows();
+    const std::size_t inner = lhs.cols();
+    const std::size_t cols = rhs.cols();
+
+    Tensor output({rows, cols});
+
+    for (std::size_t row_block = 0; row_block < rows; row_block += tile_size) {
+        const std::size_t row_end = std::min(row_block + tile_size, rows);
+        for (std::size_t col_block = 0; col_block < cols; col_block += tile_size) {
+            const std::size_t col_end = std::min(col_block + tile_size, cols);
+            for (std::size_t row = row_block; row < row_end; ++row) {
+                const float* lhs_row = lhs.data().data() + row * inner;
+                for (std::size_t col = col_block; col < col_end; ++col) {
+                    const float* rhs_row = rhs_transposed.data().data() + col * inner;
+                    output.data()[row * cols + col] = DotProduct(lhs_row, rhs_row, inner);
+                }
+            }
+        }
+    }
+
+    return output;
+}
+
 Tensor MatMul(const Tensor& lhs, const Tensor& rhs) {
     return MatMul(lhs, rhs, MatMulBackend::kTransposeRhs);
 }
@@ -294,6 +327,8 @@ Tensor MatMul(const Tensor& lhs, const Tensor& rhs, MatMulBackend backend, std::
             return MatMulTransposeRhs(lhs, rhs);
         case MatMulBackend::kThreadedTransposeRhs:
             return MatMulThreadedTransposeRhs(lhs, rhs, num_threads);
+        case MatMulBackend::kTiledTransposeRhs:
+            return MatMulTiledTransposeRhs(lhs, rhs, 64);
     }
 
     throw std::invalid_argument("unknown MatMul backend");
@@ -328,6 +363,8 @@ const char* MatMulBackendName(MatMulBackend backend) noexcept {
             return "transpose_rhs";
         case MatMulBackend::kThreadedTransposeRhs:
             return "threaded_transpose_rhs";
+        case MatMulBackend::kTiledTransposeRhs:
+            return "tiled_transpose_rhs";
     }
     return "unknown";
 }

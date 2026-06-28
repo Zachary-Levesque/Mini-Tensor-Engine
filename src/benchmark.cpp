@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -53,8 +54,10 @@ struct ModelResult {
 struct Options {
     std::size_t iterations = 200;
     std::size_t warmup_iterations = 20;
+    std::size_t tile_size = 64;
     bool run_model_benchmark = true;
     std::vector<std::size_t> thread_counts = {1, 2, 4, 8};
+    std::vector<std::size_t> matmul_sizes;
     std::filesystem::path csv_out;
     std::filesystem::path json_out;
 };
@@ -85,6 +88,16 @@ Options ParseArgs(int argc, char** argv) {
             options.run_model_benchmark = false;
             continue;
         }
+        if (arg == "--tile-size") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--tile-size requires a value");
+            }
+            options.tile_size = static_cast<std::size_t>(std::stoull(argv[++i]));
+            if (options.tile_size == 0) {
+                throw std::invalid_argument("--tile-size must be greater than 0");
+            }
+            continue;
+        }
         if (arg == "--threads") {
             if (i + 1 >= argc) {
                 throw std::invalid_argument("--threads requires a value");
@@ -110,6 +123,31 @@ Options ParseArgs(int argc, char** argv) {
             }
             continue;
         }
+        if (arg == "--matmul-sizes") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--matmul-sizes requires a value");
+            }
+            options.matmul_sizes.clear();
+            std::string raw = argv[++i];
+            std::size_t start = 0;
+            while (start < raw.size()) {
+                const std::size_t comma = raw.find(',', start);
+                const std::string token = raw.substr(start, comma - start);
+                const std::size_t size = static_cast<std::size_t>(std::stoull(token));
+                if (size == 0) {
+                    throw std::invalid_argument("--matmul-sizes values must be greater than 0");
+                }
+                options.matmul_sizes.push_back(size);
+                if (comma == std::string::npos) {
+                    break;
+                }
+                start = comma + 1;
+            }
+            if (options.matmul_sizes.empty()) {
+                throw std::invalid_argument("--matmul-sizes must provide at least one value");
+            }
+            continue;
+        }
         if (arg == "--csv-out") {
             if (i + 1 >= argc) {
                 throw std::invalid_argument("--csv-out requires a value");
@@ -128,6 +166,16 @@ Options ParseArgs(int argc, char** argv) {
     }
 
     return options;
+}
+
+bool ShouldRunMatMulCase(const Options& options, const MatMulCase& benchmark_case) {
+    if (options.matmul_sizes.empty()) {
+        return true;
+    }
+    return std::find(
+               options.matmul_sizes.begin(),
+               options.matmul_sizes.end(),
+               benchmark_case.rows) != options.matmul_sizes.end();
 }
 
 std::string EscapeJson(const std::string& value) {
@@ -208,6 +256,10 @@ std::vector<MatMulResult> RunMatMulBenchmarks(const Options& options) {
     std::cout << "case,backend,threads,avg_ns\n";
 
     for (const MatMulCase& benchmark_case : cases) {
+        if (!ShouldRunMatMulCase(options, benchmark_case)) {
+            continue;
+        }
+
         mte::Tensor lhs(
             {benchmark_case.rows, benchmark_case.inner},
             GenerateValues(benchmark_case.rows * benchmark_case.inner, generator));
@@ -271,6 +323,40 @@ std::vector<MatMulResult> RunMatMulBenchmarks(const Options& options) {
             1,
             avg_ns,
         });
+
+        if (!benchmark_case.skip_naive) {
+            const mte::Tensor tiled_output =
+                mte::MatMulTiledTransposeRhs(lhs, rhs, options.tile_size);
+            const mte::Tensor naive_output = mte::MatMul(lhs, rhs, mte::MatMulBackend::kNaive);
+            ValidateEquivalent(naive_output, tiled_output);
+
+            const double tiled_avg_ns = MeasureAverageNanoseconds(
+                [&]() {
+                    const mte::Tensor output =
+                        mte::MatMulTiledTransposeRhs(lhs, rhs, options.tile_size);
+                    sink += output.data()[0];
+                },
+                options.warmup_iterations,
+                options.iterations);
+
+            std::cout << benchmark_case.rows << 'x' << benchmark_case.inner << 'x'
+                      << benchmark_case.cols << ','
+                      << mte::MatMulBackendName(mte::MatMulBackend::kTiledTransposeRhs)
+                      << ',' << 1 << ',' << std::fixed << std::setprecision(2)
+                      << tiled_avg_ns << '\n';
+            std::cout << "tiled_speedup_vs_transpose_rhs," << benchmark_case.rows << 'x'
+                      << benchmark_case.inner << 'x' << benchmark_case.cols << ','
+                      << std::fixed << std::setprecision(2) << (avg_ns / tiled_avg_ns)
+                      << "x,tile_size," << options.tile_size << '\n';
+            results.push_back(MatMulResult{
+                std::to_string(benchmark_case.rows) + "x" +
+                    std::to_string(benchmark_case.inner) + "x" +
+                    std::to_string(benchmark_case.cols),
+                mte::MatMulBackendName(mte::MatMulBackend::kTiledTransposeRhs),
+                1,
+                tiled_avg_ns,
+            });
+        }
 
         for (std::size_t num_threads : options.thread_counts) {
             const double avg_ns = MeasureAverageNanoseconds(

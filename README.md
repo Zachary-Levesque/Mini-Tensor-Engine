@@ -108,6 +108,20 @@ close to cubic work: `8.02x` from `1024` to `2048`, then `7.92x` from `2048`
 to `4096`. Threading starts helping meaningfully at `128x128x128`: the
 4-thread backend is `2.88x` faster than the 1-thread threaded backend there.
 
+## Tiling
+
+The `tiled_transpose_rhs` backend transposes the right-hand side once, then
+walks the output matrix in row and column tiles so nearby output cells reuse
+nearby slices of the same contiguous input rows and transposed RHS rows. With
+the current dot-product kernel, tiling gives only a modest gain over plain
+`transpose_rhs`: the best measured result was tile size `32` at `512x512x512`,
+where tiled ran in `95575066.70 ns` versus `95721795.90 ns` for plain
+transpose, a `1.0015x` speedup. At `1024x1024x1024`, tile sizes `32`, `64`,
+and `128` were effectively tied with plain transpose, ranging from `0.9987x`
+to `1.0003x`. That small gain is expected here because the pretransposed AVX2
+kernel already streams both dot-product operands contiguously, and the largest
+cases are mostly limited by memory bandwidth rather than simple L2/L3 locality.
+
 ## Main Folders
 
 - `src`: C++ engine, inference CLI, benchmark CLI

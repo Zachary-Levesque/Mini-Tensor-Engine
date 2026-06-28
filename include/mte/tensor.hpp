@@ -12,6 +12,7 @@ enum class MatMulBackend {
     kNaive,
     kTransposeRhs,
     kThreadedTransposeRhs,
+    kTiledTransposeRhs,
 };
 
 class Tensor {
@@ -53,6 +54,10 @@ Tensor MatMulWithPretransposedRhs(
     const Tensor& lhs,
     const Tensor& rhs_transposed,
     std::size_t num_threads);
+Tensor MatMulTiledTransposeRhs(
+    const Tensor& lhs,
+    const Tensor& rhs,
+    std::size_t tile_size);
 Tensor AddBias(const Tensor& input, const Tensor& bias);
 bool HasSameShape(const Tensor& lhs, const Tensor& rhs) noexcept;
 const char* MatMulBackendName(MatMulBackend backend) noexcept;
