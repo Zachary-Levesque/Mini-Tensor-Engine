@@ -1,162 +1,66 @@
 # Mini Tensor Engine
 
-Mini Tensor Engine is a custom C++ machine learning inference engine built from scratch.
+Mini Tensor Engine is a C++ inference runtime for studying how tensor layout, matrix multiplication kernels, SIMD, cache locality, threading, and int8 quantization change CPU inference latency.
 
-Simple meaning:
+## Why this exists
 
-- a model already has learned weights
-- inference means using those weights to produce an output
-- this project builds the software that runs that output path
+An inference engine moves input tensors and learned weights through matrix kernels, bias addition, activation functions, and model-level dispatch. At the CPU level, the hard part is not writing `C = A * B`; it is choosing memory layouts, avoiding strided cache-line fetches, preserving numerical correctness, and proving changes with measurements. PyTorch hides those details by design, while this project keeps them visible in C++.
 
-This project is about **running** models correctly and efficiently, not training them.
+The project targets systems engineering skills used in inference runtimes: row-major storage, backend selection, AVX2 dot products, pretransposed weights, cache scaling, thread partitioning, int8 quantization, and benchmark discipline. Each claim is tied to `results.json`, not intuition.
 
-## Goal
+## Architecture
 
-The goal is to understand how ML inference works at a low level and to show that process clearly.
+The `Tensor` class is rank-2 and row-major, backed by `std::vector<float>`. That limits generality, but it makes address calculation explicit: `row * cols + col` is the storage contract every kernel shares. The matmul backend enum keeps dispatch cheap and makes comparisons repeatable. `naive` is the baseline with strided RHS reads. `transpose_rhs` pays one layout conversion so both dot-product operands are contiguous. `threaded_transpose_rhs` partitions rows across workers, which keeps output writes disjoint but does not remove bandwidth pressure. `tiled_transpose_rhs` walks row and column blocks after transposing RHS; its best measured gain is only `1.0015x`, because the AVX2 pretransposed dot product already streams contiguous operands.
 
-The project focuses on:
+Layer code is intentionally separate from kernel code. `Linear` calls matmul plus bias, while `ReLU`, `Sigmoid`, `Tanh`, and `Softmax` operate over tensors without owning backend policy. The model loader reads a manifest and caches transposed weights when the chosen backend benefits from that format. Python generates deterministic reference tensors and expected outputs; C++ loads the same files and must match them before benchmark output is treated as valid.
 
-- tensor storage
-- matrix multiplication
-- neural-network layers
-- model execution
-- correctness checking
-- performance benchmarking
+## Performance results
 
-## Why It Matters
-
-Most ML tools hide the low-level details. This project shows what happens underneath:
-
-- how model data is stored
-- how a forward pass runs
-- why matrix multiplication is the main cost
-- how cache-aware code improves speed
-- how multithreading helps larger workloads
-
-So this project connects machine learning with systems programming and performance engineering.
-
-## Key Concepts
-
-- **C++ Systems Programming**: custom tensor structure, memory layout, modular design  
-- **Performance Engineering**: cache-aware optimization, benchmarking, kernel vs end-to-end tradeoffs  
-- **Parallel Computing**: multithreaded matrix multiplication, scalability considerations  
-- **ML Infrastructure**: inference pipeline, forward-pass execution, layer abstractions  
-- **Numerical Computing**: matrix multiplication, floating-point correctness, validation  
-- **Systems + ML Integration**: Python ↔ C++ verification, precomputation (cached weights)  
-- **Benchmarking Discipline**: backend comparison, performance measurement, regression safety
-
-## What Was Built
-
-- a custom rank-2 `Tensor` class
-- three matmul backends: `naive`, `transpose_rhs`, `threaded_transpose_rhs`
-- common layers: `Linear`, `ReLU`, `Sigmoid`, `Tanh`, `Softmax`
-- a manifest-driven `FeedForwardModel`
-- Python reference generation and C++ correctness validation
-- benchmarking with CSV/JSON export
-- multiple example model bundles
-- a local UI for guided explanation, inference, and benchmark visualization
-
-## Results
-
-The C++ engine matches the Python reference output. The AVX2 dot-product
-kernel is present in the benchmark binary, and the assembly check finds
-`vmulps` and `vaddps` instructions in `build/mte_benchmark`.
-
-The latest large matrix benchmark was run with:
-
-```bash
-./build/mte_benchmark --iterations 5 --warmup 2 --threads 1,4 --skip-model --csv-out build/results.csv --json-out build/results.json
-```
-
-On this Apple Silicon machine the AVX2 benchmark binary is built as x86_64 so
-the AVX2 path can be compiled and inspected. Naive is skipped for `2048` and
-`4096` because those sizes are too slow for this benchmark run.
-
-| Case | Backend | Threads | Avg ns | Speedup vs naive |
+| Case | Backend | Threads | Avg (ns) | vs Naive |
 | --- | --- | ---: | ---: | ---: |
-| `128x128x128` | `naive` | 1 | `4057925.00` | `1.00x` |
-| `128x128x128` | `transpose_rhs` | 1 | `1540833.40` | `2.63x` |
-| `128x128x128` | `threaded_transpose_rhs` | 1 | `1517291.60` | `2.67x` |
-| `128x128x128` | `threaded_transpose_rhs` | 4 | `526833.20` | `7.70x` |
-| `256x256x256` | `naive` | 1 | `32117716.60` | `1.00x` |
-| `256x256x256` | `transpose_rhs` | 1 | `12039883.40` | `2.67x` |
-| `256x256x256` | `threaded_transpose_rhs` | 1 | `12061800.00` | `2.66x` |
-| `256x256x256` | `threaded_transpose_rhs` | 4 | `3276425.00` | `9.80x` |
-| `512x512x512` | `naive` | 1 | `259484433.40` | `1.00x` |
-| `512x512x512` | `transpose_rhs` | 1 | `95735258.40` | `2.71x` |
-| `512x512x512` | `threaded_transpose_rhs` | 1 | `95574416.80` | `2.71x` |
-| `512x512x512` | `threaded_transpose_rhs` | 4 | `28063441.60` | `9.25x` |
-| `1024x1024x1024` | `naive` | 1 | `2630605008.40` | `1.00x` |
-| `1024x1024x1024` | `transpose_rhs` | 1 | `777458233.40` | `3.38x` |
-| `1024x1024x1024` | `threaded_transpose_rhs` | 1 | `776299408.20` | `3.39x` |
-| `1024x1024x1024` | `threaded_transpose_rhs` | 4 | `211434725.00` | `12.44x` |
-| `2048x2048x2048` | `transpose_rhs` | 1 | `6231755500.00` | `n/a` |
-| `2048x2048x2048` | `threaded_transpose_rhs` | 1 | `6230773675.00` | `n/a` |
-| `2048x2048x2048` | `threaded_transpose_rhs` | 4 | `1805852341.60` | `n/a` |
-| `4096x4096x4096` | `transpose_rhs` | 1 | `49378770275.00` | `n/a` |
-| `4096x4096x4096` | `threaded_transpose_rhs` | 1 | `49353226900.00` | `n/a` |
-| `4096x4096x4096` | `threaded_transpose_rhs` | 4 | `16093085308.40` | `n/a` |
+| `128x128x128` | `naive` | 1 | `4068833.35` | `1.00x` |
+| `128x128x128` | `transpose_rhs` | 1 | `1512945.80` | `2.69x` |
+| `128x128x128` | `tiled_transpose_rhs` | 1 | `1500064.60` | `2.71x` |
+| `128x128x128` | `threaded_transpose_rhs` | 1 | `1517608.35` | `2.68x` |
+| `256x256x256` | `naive` | 1 | `32082735.40` | `1.00x` |
+| `256x256x256` | `transpose_rhs` | 1 | `12022047.90` | `2.67x` |
+| `256x256x256` | `tiled_transpose_rhs` | 1 | `11997002.05` | `2.67x` |
+| `256x256x256` | `threaded_transpose_rhs` | 1 | `12017931.25` | `2.67x` |
+| `512x512x512` | `naive` | 1 | `266517072.90` | `1.00x` |
+| `512x512x512` | `transpose_rhs` | 1 | `95725933.35` | `2.78x` |
+| `512x512x512` | `tiled_transpose_rhs` | 1 | `96027616.70` | `2.78x` |
+| `512x512x512` | `threaded_transpose_rhs` | 1 | `95685639.60` | `2.79x` |
+| `1024x1024x1024` | `naive` | 1 | `2618671414.60` | `1.00x` |
+| `1024x1024x1024` | `transpose_rhs` | 1 | `776541785.40` | `3.37x` |
+| `1024x1024x1024` | `tiled_transpose_rhs` | 1 | `779939433.30` | `3.36x` |
+| `1024x1024x1024` | `threaded_transpose_rhs` | 1 | `776688218.75` | `3.37x` |
+| `2048x2048x2048` | `transpose_rhs` | 1 | `6172739629.20` | `n/a` |
+| `2048x2048x2048` | `threaded_transpose_rhs` | 1 | `6194787968.75` | `n/a` |
+| `4096x4096x4096` | `transpose_rhs` | 1 | `49272107562.50` | `n/a` |
+| `4096x4096x4096` | `threaded_transpose_rhs` | 1 | `49469847595.85` | `n/a` |
 
-The cache-locality benefit of `transpose_rhs` over naive peaks at
-`1024x1024x1024`, where it is `3.38x` faster than naive. L2/L3 pressure becomes
-visible at `1024`: doubling from `512` to `1024` should cost about `8x` for
-cubic work, but naive grows by `10.14x` while `transpose_rhs` grows by `8.12x`.
-At `1024`, each matrix is about `4 MiB`, so the working set has moved beyond
-typical private L2 capacity and is leaning harder on shared cache. At `2048`
-and `4096`, naive is skipped, but the transposed backend continues scaling
-close to cubic work: `8.02x` from `1024` to `2048`, then `7.92x` from `2048`
-to `4096`. Threading starts helping meaningfully at `128x128x128`: the
-4-thread backend is `2.88x` faster than the 1-thread threaded backend there.
+Cache locality is clearest at `1024x1024x1024`: `transpose_rhs` is `3.37x` versus naive by replacing strided RHS loads with contiguous loads. The one-thread threaded backend tracks `transpose_rhs`, confirming that row partitioning does not change the single-thread memory path. At `2048` and `4096`, naive is skipped; `transpose_rhs` moves from `6172739629.20 ns` to `49272107562.50 ns`, close to cubic scaling and consistent with bandwidth pressure. The int8 path reaches `3.44x` at `1024x1024x1024`, showing that reduced data width matters when memory traffic dominates.
 
-## Tiling
+## Int8 quantization
 
-The `tiled_transpose_rhs` backend transposes the right-hand side once, then
-walks the output matrix in row and column tiles so nearby output cells reuse
-nearby slices of the same contiguous input rows and transposed RHS rows. With
-the current dot-product kernel, tiling gives only a modest gain over plain
-`transpose_rhs`: the best measured result was tile size `32` at `512x512x512`,
-where tiled ran in `95575066.70 ns` versus `95721795.90 ns` for plain
-transpose, a `1.0015x` speedup. At `1024x1024x1024`, tile sizes `32`, `64`,
-and `128` were effectively tied with plain transpose, ranging from `0.9987x`
-to `1.0003x`. That small gain is expected here because the pretransposed AVX2
-kernel already streams both dot-product operands contiguously, and the largest
-cases are mostly limited by memory bandwidth rather than simple L2/L3 locality.
+Symmetric quantization maps floats to signed int8 with one scale and zero point `0`. Matmul accumulates int8 products into `int32_t`, then converts each result with `lhs.scale * rhs.scale`.
 
-## Int8 Quantization
+| Case | Float transpose_rhs (ns) | Int8 dequantized (ns) | Speedup |
+| --- | ---: | ---: | ---: |
+| `256x256x256` | `12003135.45` | `5174472.95` | `2.32x` |
+| `512x512x512` | `95741181.25` | `32833693.75` | `2.92x` |
+| `1024x1024x1024` | `781326560.40` | `227291441.70` | `3.44x` |
 
-Symmetric int8 quantization maps float values to signed 8-bit integers using a
-single scale and a zero point of `0`, so dequantization is simply
-`int8_value * scale`. This keeps the implementation simple and makes int8
-matmul accumulate products into `int32_t` before converting the result back to
-float with `lhs.scale * rhs.scale`.
+Tests require quantize/dequantize max absolute error below `0.02` and `32x64 * 64x32` int8 matmul max absolute error below `0.5`. This is scalar int8; production kernels need AVX-VNNI or AMX dot-product instructions, and without them scalar int8 can lose to a stronger AVX2 float implementation.
 
-The correctness tests check that quantize/dequantize round-trip error stays
-below `0.02` and that a `32x64 * 64x32` int8 matmul stays within `0.5` max
-absolute error of the float result. In the latest benchmark, scalar
-`int8_dequantized` was faster than float `transpose_rhs`: `2.32x` at
-`256x256x256`, `2.92x` at `512x512x512`, and `3.44x` at `1024x1024x1024`.
-Those speedups are useful for this educational kernel, but production int8
-speedups usually require CPU dot-product instructions such as AVX-VNNI or AMX;
-without those, scalar int8 can also lose to a highly tuned AVX2 float kernel on
-other machines.
-
-## Main Folders
-
-- `src`: C++ engine, inference CLI, benchmark CLI
-- `include/mte`: C++ headers
-- `python`: reference generation and Python baseline
-- `tests`: correctness tests
-- `data/examples`: sample model bundles
-- `ui`: local browser dashboard
-
-## Try It
+## How to run it
 
 ```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/mte_tests
+./build/mte_benchmark --iterations 20 --warmup 5 --threads 1 --skip-model --csv-out build/results.csv --json-out build/results.json
 python3 python/export_reference.py
 python3 python/baseline.py
 ./build/mte_infer --backend threaded_transpose_rhs --threads 4
-./build/mte_benchmark --iterations 200 --warmup 20 --threads 1,2,4,8 --csv-out build/results.csv --json-out build/results.json
-python3 ui/server.py
 ```
-
-Then open `http://127.0.0.1:8000`.
