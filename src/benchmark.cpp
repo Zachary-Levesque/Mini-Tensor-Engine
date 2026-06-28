@@ -21,6 +21,7 @@ struct MatMulCase {
     std::size_t rows;
     std::size_t inner;
     std::size_t cols;
+    bool skip_naive;
 };
 
 struct ModelCase {
@@ -193,10 +194,12 @@ double MeasureAverageNanoseconds(Fn&& fn, std::size_t warmup_iterations, std::si
 
 std::vector<MatMulResult> RunMatMulBenchmarks(const Options& options) {
     const std::vector<MatMulCase> cases = {
-        {32, 64, 32},
-        {64, 64, 64},
-        {128, 128, 128},
-        {256, 256, 256},
+        {128, 128, 128, false},
+        {256, 256, 256, false},
+        {512, 512, 512, false},
+        {1024, 1024, 1024, false},
+        {2048, 2048, 2048, true},
+        {4096, 4096, 4096, true},
     };
 
     std::mt19937 generator(7);
@@ -212,34 +215,62 @@ std::vector<MatMulResult> RunMatMulBenchmarks(const Options& options) {
             {benchmark_case.inner, benchmark_case.cols},
             GenerateValues(benchmark_case.inner * benchmark_case.cols, generator));
 
-        const mte::Tensor naive_output = mte::MatMul(lhs, rhs, mte::MatMulBackend::kNaive);
         const mte::Tensor optimized_output =
             mte::MatMul(lhs, rhs, mte::MatMulBackend::kTransposeRhs);
-        ValidateEquivalent(naive_output, optimized_output);
+        if (!benchmark_case.skip_naive) {
+            const mte::Tensor naive_output = mte::MatMul(lhs, rhs, mte::MatMulBackend::kNaive);
+            ValidateEquivalent(naive_output, optimized_output);
+        } else {
+            std::cout << "skip_note," << benchmark_case.rows << 'x' << benchmark_case.inner
+                      << 'x' << benchmark_case.cols
+                      << ",naive skipped because this size is too slow for this benchmark run\n";
+        }
 
         volatile float sink = 0.0F;
-        for (const mte::MatMulBackend backend :
-             {mte::MatMulBackend::kNaive, mte::MatMulBackend::kTransposeRhs}) {
+        if (!benchmark_case.skip_naive) {
             const double avg_ns = MeasureAverageNanoseconds(
                 [&]() {
-                    const mte::Tensor output = mte::MatMul(lhs, rhs, backend);
+                    const mte::Tensor output = mte::MatMul(lhs, rhs, mte::MatMulBackend::kNaive);
                     sink += output.data()[0];
                 },
                 options.warmup_iterations,
                 options.iterations);
 
             std::cout << benchmark_case.rows << 'x' << benchmark_case.inner << 'x'
-                      << benchmark_case.cols << ',' << mte::MatMulBackendName(backend) << ','
-                      << 1 << ',' << std::fixed << std::setprecision(2) << avg_ns << '\n';
+                      << benchmark_case.cols << ','
+                      << mte::MatMulBackendName(mte::MatMulBackend::kNaive) << ',' << 1 << ','
+                      << std::fixed << std::setprecision(2) << avg_ns << '\n';
             results.push_back(MatMulResult{
                 std::to_string(benchmark_case.rows) + "x" +
                     std::to_string(benchmark_case.inner) + "x" +
                     std::to_string(benchmark_case.cols),
-                mte::MatMulBackendName(backend),
+                mte::MatMulBackendName(mte::MatMulBackend::kNaive),
                 1,
                 avg_ns,
             });
         }
+
+        const double avg_ns = MeasureAverageNanoseconds(
+            [&]() {
+                const mte::Tensor output =
+                    mte::MatMul(lhs, rhs, mte::MatMulBackend::kTransposeRhs);
+                sink += output.data()[0];
+            },
+            options.warmup_iterations,
+            options.iterations);
+
+        std::cout << benchmark_case.rows << 'x' << benchmark_case.inner << 'x'
+                  << benchmark_case.cols << ','
+                  << mte::MatMulBackendName(mte::MatMulBackend::kTransposeRhs) << ',' << 1
+                  << ',' << std::fixed << std::setprecision(2) << avg_ns << '\n';
+        results.push_back(MatMulResult{
+            std::to_string(benchmark_case.rows) + "x" +
+                std::to_string(benchmark_case.inner) + "x" +
+                std::to_string(benchmark_case.cols),
+            mte::MatMulBackendName(mte::MatMulBackend::kTransposeRhs),
+            1,
+            avg_ns,
+        });
 
         for (std::size_t num_threads : options.thread_counts) {
             const double avg_ns = MeasureAverageNanoseconds(

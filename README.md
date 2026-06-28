@@ -58,39 +58,55 @@ So this project connects machine learning with systems programming and performan
 
 ## Results
 
-The C++ engine matches the Python reference output, and the AVX2 dot-product
-kernel is present in the benchmark binary. The assembly check finds `vmulps`
-and `vaddps` instructions in `build/mte_benchmark`.
+The C++ engine matches the Python reference output. The AVX2 dot-product
+kernel is present in the benchmark binary, and the assembly check finds
+`vmulps` and `vaddps` instructions in `build/mte_benchmark`.
 
-The latest benchmark was run with:
+The latest large matrix benchmark was run with:
 
 ```bash
-./build/mte_benchmark --iterations 200 --warmup 20 --threads 1,2,4,8 --csv-out build/results.csv --json-out build/results.json
+./build/mte_benchmark --iterations 5 --warmup 2 --threads 1,4 --skip-model --csv-out build/results.csv --json-out build/results.json
 ```
 
 On this Apple Silicon machine the AVX2 benchmark binary is built as x86_64 so
-the AVX2 path can be compiled and inspected. The new single-thread
-`transpose_rhs` AVX2 path compares against the old checked-in `results.json`
-numbers as follows:
+the AVX2 path can be compiled and inspected. Naive is skipped for `2048` and
+`4096` because those sizes are too slow for this benchmark run.
 
-- `32x64x32`: old `488250.00 ns`, new `57523.96 ns`, `8.49x` faster
-- `64x64x64`: old `1729833.00 ns`, new `194613.96 ns`, `8.89x` faster
-- `128x128x128`: old `12811459.00 ns`, new `1516633.33 ns`, `8.45x` faster
-- `256x256x256`: old `98634500.00 ns`, new `12245588.54 ns`, `8.05x` faster
+| Case | Backend | Threads | Avg ns | Speedup vs naive |
+| --- | --- | ---: | ---: | ---: |
+| `128x128x128` | `naive` | 1 | `4057925.00` | `1.00x` |
+| `128x128x128` | `transpose_rhs` | 1 | `1540833.40` | `2.63x` |
+| `128x128x128` | `threaded_transpose_rhs` | 1 | `1517291.60` | `2.67x` |
+| `128x128x128` | `threaded_transpose_rhs` | 4 | `526833.20` | `7.70x` |
+| `256x256x256` | `naive` | 1 | `32117716.60` | `1.00x` |
+| `256x256x256` | `transpose_rhs` | 1 | `12039883.40` | `2.67x` |
+| `256x256x256` | `threaded_transpose_rhs` | 1 | `12061800.00` | `2.66x` |
+| `256x256x256` | `threaded_transpose_rhs` | 4 | `3276425.00` | `9.80x` |
+| `512x512x512` | `naive` | 1 | `259484433.40` | `1.00x` |
+| `512x512x512` | `transpose_rhs` | 1 | `95735258.40` | `2.71x` |
+| `512x512x512` | `threaded_transpose_rhs` | 1 | `95574416.80` | `2.71x` |
+| `512x512x512` | `threaded_transpose_rhs` | 4 | `28063441.60` | `9.25x` |
+| `1024x1024x1024` | `naive` | 1 | `2630605008.40` | `1.00x` |
+| `1024x1024x1024` | `transpose_rhs` | 1 | `777458233.40` | `3.38x` |
+| `1024x1024x1024` | `threaded_transpose_rhs` | 1 | `776299408.20` | `3.39x` |
+| `1024x1024x1024` | `threaded_transpose_rhs` | 4 | `211434725.00` | `12.44x` |
+| `2048x2048x2048` | `transpose_rhs` | 1 | `6231755500.00` | `n/a` |
+| `2048x2048x2048` | `threaded_transpose_rhs` | 1 | `6230773675.00` | `n/a` |
+| `2048x2048x2048` | `threaded_transpose_rhs` | 4 | `1805852341.60` | `n/a` |
+| `4096x4096x4096` | `transpose_rhs` | 1 | `49378770275.00` | `n/a` |
+| `4096x4096x4096` | `threaded_transpose_rhs` | 1 | `49353226900.00` | `n/a` |
+| `4096x4096x4096` | `threaded_transpose_rhs` | 4 | `16093085308.40` | `n/a` |
 
-Within the new benchmark run, the AVX2 `transpose_rhs` backend is faster than
-the naive backend by:
-
-- `32x64x32`: `2.47x` faster than naive
-- `64x64x64`: `2.57x` faster than naive
-- `128x128x128`: `2.71x` faster than naive
-- `256x256x256`: `4.10x` faster than naive
-
-The threaded AVX2 backend improves larger workloads further. At 8 threads,
-`threaded_transpose_rhs` is `21.15x` faster than naive at `256x256x256`
-(`2377007.08 ns` versus `50262629.79 ns`). For the smallest case,
-`32x64x32`, 8 threads are slower than naive (`0.61x`) because thread overhead
-dominates.
+The cache-locality benefit of `transpose_rhs` over naive peaks at
+`1024x1024x1024`, where it is `3.38x` faster than naive. L2/L3 pressure becomes
+visible at `1024`: doubling from `512` to `1024` should cost about `8x` for
+cubic work, but naive grows by `10.14x` while `transpose_rhs` grows by `8.12x`.
+At `1024`, each matrix is about `4 MiB`, so the working set has moved beyond
+typical private L2 capacity and is leaning harder on shared cache. At `2048`
+and `4096`, naive is skipped, but the transposed backend continues scaling
+close to cubic work: `8.02x` from `1024` to `2048`, then `7.92x` from `2048`
+to `4096`. Threading starts helping meaningfully at `128x128x128`: the
+4-thread backend is `2.88x` faster than the 1-thread threaded backend there.
 
 ## Main Folders
 
