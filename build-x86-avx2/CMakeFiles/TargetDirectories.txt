@@ -1,0 +1,7 @@
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/mte.dir
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/mte_infer.dir
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/mte_benchmark.dir
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/mte_tests.dir
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/test.dir
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/edit_cache.dir
+/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/CMakeFiles/rebuild_cache.dir
