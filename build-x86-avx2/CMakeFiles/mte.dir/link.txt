@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmte.a CMakeFiles/mte.dir/src/io.cpp.o CMakeFiles/mte.dir/src/layers.cpp.o CMakeFiles/mte.dir/src/model.cpp.o CMakeFiles/mte.dir/src/tensor.cpp.o
+/usr/bin/ranlib libmte.a
