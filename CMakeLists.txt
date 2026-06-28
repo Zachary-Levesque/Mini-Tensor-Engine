@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MTE_BUILD_TESTS "Build Mini Tensor Engine tests" ON)
+option(MTE_ENABLE_AVX2 "Enable AVX2 matmul dot-product kernel when supported" ON)
 
 add_library(mte
     src/io.cpp
@@ -25,6 +26,20 @@ target_compile_options(mte
         -Wextra
         -Wpedantic
 )
+
+if(MTE_ENABLE_AVX2)
+    if(MSVC)
+        target_compile_options(mte PRIVATE /arch:AVX2)
+        target_compile_definitions(mte PRIVATE MTE_ENABLE_AVX2=1)
+    else()
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag("-mavx2" MTE_COMPILER_SUPPORTS_AVX2)
+        if(MTE_COMPILER_SUPPORTS_AVX2)
+            target_compile_options(mte PRIVATE -mavx2)
+            target_compile_definitions(mte PRIVATE MTE_ENABLE_AVX2=1)
+        endif()
+    endif()
+endif()
 
 add_executable(mte_infer src/main.cpp)
 target_link_libraries(mte_infer PRIVATE mte)
