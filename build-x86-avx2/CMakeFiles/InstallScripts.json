@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/zacharylevesque/Documents/GitHub/Mini-Tensor-Engine/build-x86-avx2/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
