@@ -7,6 +7,10 @@
 #include <thread>
 #include <vector>
 
+#if defined(MTE_ENABLE_AVX2) && defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 namespace mte {
 
 Tensor::Tensor(std::vector<std::size_t> shape)
@@ -117,6 +121,46 @@ void ValidateMatMulInputs(const Tensor& lhs, const Tensor& rhs) {
     }
 }
 
+float DotProductScalar(const float* lhs, const float* rhs, std::size_t count) {
+    float sum = 0.0F;
+    for (std::size_t i = 0; i < count; ++i) {
+        sum += lhs[i] * rhs[i];
+    }
+    return sum;
+}
+
+#if defined(MTE_ENABLE_AVX2) && defined(__AVX2__)
+float DotProductAvx2(const float* lhs, const float* rhs, std::size_t count) {
+    std::size_t i = 0;
+    __m256 sum = _mm256_setzero_ps();
+
+    for (; i + 8 <= count; i += 8) {
+        const __m256 lhs_values = _mm256_loadu_ps(lhs + i);
+        const __m256 rhs_values = _mm256_loadu_ps(rhs + i);
+        sum = _mm256_add_ps(sum, _mm256_mul_ps(lhs_values, rhs_values));
+    }
+
+    alignas(32) float lanes[8];
+    _mm256_store_ps(lanes, sum);
+
+    float total = lanes[0] + lanes[1] + lanes[2] + lanes[3] +
+                  lanes[4] + lanes[5] + lanes[6] + lanes[7];
+
+    for (; i < count; ++i) {
+        total += lhs[i] * rhs[i];
+    }
+    return total;
+}
+#endif
+
+float DotProduct(const float* lhs, const float* rhs, std::size_t count) {
+#if defined(MTE_ENABLE_AVX2) && defined(__AVX2__)
+    return DotProductAvx2(lhs, rhs, count);
+#else
+    return DotProductScalar(lhs, rhs, count);
+#endif
+}
+
 Tensor MatMulNaive(const Tensor& lhs, const Tensor& rhs) {
     ValidateMatMulInputs(lhs, rhs);
 
@@ -199,10 +243,7 @@ Tensor MatMulWithPretransposedRhs(
                 const float* lhs_row = lhs.data().data() + (row * inner);
                 const float* rhs_row = rhs_transposed.data().data() + (col * inner);
 
-                float sum = 0.0F;
-                for (std::size_t k = 0; k < inner; ++k) {
-                    sum += lhs_row[k] * rhs_row[k];
-                }
+                const float sum = DotProduct(lhs_row, rhs_row, inner);
                 output.at(row, col) = sum;
             }
         }
