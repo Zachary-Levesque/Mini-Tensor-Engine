@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "mte/model.hpp"
+#include "mte/quantize.hpp"
 #include "mte/tensor.hpp"
 
 namespace {
@@ -49,6 +50,12 @@ struct ModelResult {
     std::string backend_name;
     std::size_t threads;
     double avg_ns;
+};
+
+struct QuantizedResult {
+    std::string case_name;
+    double float_transpose_rhs_avg_ns;
+    double int8_avg_ns;
 };
 
 struct Options {
@@ -387,6 +394,79 @@ std::vector<MatMulResult> RunMatMulBenchmarks(const Options& options) {
     return results;
 }
 
+std::vector<QuantizedResult> RunQuantizedBenchmarks(const Options& options) {
+    const std::vector<MatMulCase> cases = {
+        {256, 256, 256, false},
+        {512, 512, 512, false},
+        {1024, 1024, 1024, false},
+    };
+
+    std::mt19937 generator(23);
+    std::vector<QuantizedResult> results;
+    std::cout << "Quantized MatMul comparison\n";
+    std::cout << "case,float_transpose_rhs_avg_ns,int8_avg_ns,speedup_vs_float\n";
+
+    for (const MatMulCase& benchmark_case : cases) {
+        if (!ShouldRunMatMulCase(options, benchmark_case)) {
+            continue;
+        }
+
+        mte::Tensor lhs(
+            {benchmark_case.rows, benchmark_case.inner},
+            GenerateValues(benchmark_case.rows * benchmark_case.inner, generator));
+        mte::Tensor rhs(
+            {benchmark_case.inner, benchmark_case.cols},
+            GenerateValues(benchmark_case.inner * benchmark_case.cols, generator));
+
+        const mte::Tensor float_output =
+            mte::MatMul(lhs, rhs, mte::MatMulBackend::kTransposeRhs);
+        const mte::QuantizedTensor quantized_lhs = mte::QuantizeSymmetric(lhs);
+        const mte::QuantizedTensor quantized_rhs_transposed =
+            mte::QuantizeSymmetric(mte::Transpose(rhs));
+        const mte::Tensor int8_output =
+            mte::MatMulInt8Dequantized(quantized_lhs, quantized_rhs_transposed);
+
+        if (!mte::HasSameShape(float_output, int8_output)) {
+            throw std::runtime_error("quantized benchmark shape mismatch");
+        }
+
+        volatile float sink = 0.0F;
+        const double float_avg_ns = MeasureAverageNanoseconds(
+            [&]() {
+                const mte::Tensor output =
+                    mte::MatMul(lhs, rhs, mte::MatMulBackend::kTransposeRhs);
+                sink += output.data()[0];
+            },
+            options.warmup_iterations,
+            options.iterations);
+
+        const double int8_avg_ns = MeasureAverageNanoseconds(
+            [&]() {
+                const mte::Tensor output =
+                    mte::MatMulInt8Dequantized(quantized_lhs, quantized_rhs_transposed);
+                sink += output.data()[0];
+            },
+            options.warmup_iterations,
+            options.iterations);
+
+        std::cout << benchmark_case.rows << 'x' << benchmark_case.inner << 'x'
+                  << benchmark_case.cols << ',' << std::fixed << std::setprecision(2)
+                  << float_avg_ns << ',' << int8_avg_ns << ','
+                  << (float_avg_ns / int8_avg_ns) << "x\n";
+        std::cout << "quantized_sink," << sink << '\n';
+
+        results.push_back(QuantizedResult{
+            std::to_string(benchmark_case.rows) + "x" +
+                std::to_string(benchmark_case.inner) + "x" +
+                std::to_string(benchmark_case.cols),
+            float_avg_ns,
+            int8_avg_ns,
+        });
+    }
+
+    return results;
+}
+
 struct ModelData {
     mte::Tensor input;
     mte::Tensor w1;
@@ -515,7 +595,8 @@ std::vector<ModelResult> RunModelBenchmark(const Options& options) {
 void WriteCsvReport(
     const std::filesystem::path& path,
     const std::vector<MatMulResult>& matmul_results,
-    const std::vector<ModelResult>& model_results) {
+    const std::vector<ModelResult>& model_results,
+    const std::vector<QuantizedResult>& quantized_results) {
     const std::filesystem::path parent = path.parent_path();
     if (!parent.string().empty()) {
         std::filesystem::create_directories(parent);
@@ -537,13 +618,21 @@ void WriteCsvReport(
                << result.output_width << ',' << result.backend_name << ',' << result.threads
                << ',' << std::fixed << std::setprecision(2) << result.avg_ns << '\n';
     }
+    for (const QuantizedResult& result : quantized_results) {
+        output << "quantized," << result.case_name << ",,,,,transpose_rhs,1,"
+               << std::fixed << std::setprecision(2) << result.float_transpose_rhs_avg_ns
+               << '\n';
+        output << "quantized," << result.case_name << ",,,,,int8_dequantized,1,"
+               << std::fixed << std::setprecision(2) << result.int8_avg_ns << '\n';
+    }
 }
 
 void WriteJsonReport(
     const std::filesystem::path& path,
     const Options& options,
     const std::vector<MatMulResult>& matmul_results,
-    const std::vector<ModelResult>& model_results) {
+    const std::vector<ModelResult>& model_results,
+    const std::vector<QuantizedResult>& quantized_results) {
     const std::filesystem::path parent = path.parent_path();
     if (!parent.string().empty()) {
         std::filesystem::create_directories(parent);
@@ -565,6 +654,22 @@ void WriteJsonReport(
                << ", \"avg_ns\": " << std::fixed << std::setprecision(2) << result.avg_ns
                << "}";
         if (i + 1 < matmul_results.size()) {
+            output << ',';
+        }
+        output << '\n';
+    }
+    output << "  ],\n";
+    output << "  \"quantized_results\": [\n";
+    for (std::size_t i = 0; i < quantized_results.size(); ++i) {
+        const QuantizedResult& result = quantized_results[i];
+        output << "    {\"case\": \"" << EscapeJson(result.case_name)
+               << "\", \"float_transpose_rhs_avg_ns\": " << std::fixed << std::setprecision(2)
+               << result.float_transpose_rhs_avg_ns
+               << ", \"int8_avg_ns\": " << std::fixed << std::setprecision(2)
+               << result.int8_avg_ns
+               << ", \"speedup_vs_float\": " << std::fixed << std::setprecision(4)
+               << (result.float_transpose_rhs_avg_ns / result.int8_avg_ns) << "}";
+        if (i + 1 < quantized_results.size()) {
             output << ',';
         }
         output << '\n';
@@ -597,16 +702,17 @@ int main(int argc, char** argv) {
     try {
         const Options options = ParseArgs(argc, argv);
         const std::vector<MatMulResult> matmul_results = RunMatMulBenchmarks(options);
+        const std::vector<QuantizedResult> quantized_results = RunQuantizedBenchmarks(options);
         std::vector<ModelResult> model_results;
         if (options.run_model_benchmark) {
             model_results = RunModelBenchmark(options);
         }
         if (!options.csv_out.empty()) {
-            WriteCsvReport(options.csv_out, matmul_results, model_results);
+            WriteCsvReport(options.csv_out, matmul_results, model_results, quantized_results);
             std::cout << "CSV report written to " << options.csv_out << '\n';
         }
         if (!options.json_out.empty()) {
-            WriteJsonReport(options.json_out, options, matmul_results, model_results);
+            WriteJsonReport(options.json_out, options, matmul_results, model_results, quantized_results);
             std::cout << "JSON report written to " << options.json_out << '\n';
         }
         return 0;

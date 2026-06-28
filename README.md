@@ -122,6 +122,24 @@ to `1.0003x`. That small gain is expected here because the pretransposed AVX2
 kernel already streams both dot-product operands contiguously, and the largest
 cases are mostly limited by memory bandwidth rather than simple L2/L3 locality.
 
+## Int8 Quantization
+
+Symmetric int8 quantization maps float values to signed 8-bit integers using a
+single scale and a zero point of `0`, so dequantization is simply
+`int8_value * scale`. This keeps the implementation simple and makes int8
+matmul accumulate products into `int32_t` before converting the result back to
+float with `lhs.scale * rhs.scale`.
+
+The correctness tests check that quantize/dequantize round-trip error stays
+below `0.02` and that a `32x64 * 64x32` int8 matmul stays within `0.5` max
+absolute error of the float result. In the latest benchmark, scalar
+`int8_dequantized` was faster than float `transpose_rhs`: `2.32x` at
+`256x256x256`, `2.92x` at `512x512x512`, and `3.44x` at `1024x1024x1024`.
+Those speedups are useful for this educational kernel, but production int8
+speedups usually require CPU dot-product instructions such as AVX-VNNI or AMX;
+without those, scalar int8 can also lose to a highly tuned AVX2 float kernel on
+other machines.
+
 ## Main Folders
 
 - `src`: C++ engine, inference CLI, benchmark CLI

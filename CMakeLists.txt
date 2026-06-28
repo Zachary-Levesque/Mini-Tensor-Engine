@@ -12,6 +12,7 @@ add_library(mte
     src/io.cpp
     src/layers.cpp
     src/model.cpp
+    src/quantize.cpp
     src/tensor.cpp
 )
 

@@ -6,6 +6,7 @@
 #include "mte/io.hpp"
 #include "mte/layers.hpp"
 #include "mte/model.hpp"
+#include "mte/quantize.hpp"
 
 namespace {
 
@@ -162,6 +163,41 @@ int main() {
         const mte::Tensor roundtrip = mte::LoadTensorFromTextFile(scratch_dir / "roundtrip.txt");
         Expect(mte::HasSameShape(output, roundtrip), "roundtrip shape mismatch");
         Expect(AlmostEqual(output.at(0, 1), roundtrip.at(0, 1), 1e-6F), "roundtrip value mismatch");
+
+        const mte::Tensor quantize_input({2, 4}, {-1.0F, -0.5F, 0.0F, 0.25F, 0.5F, 0.75F, 1.0F, 1.25F});
+        const mte::QuantizedTensor quantized = mte::QuantizeSymmetric(quantize_input);
+        const mte::Tensor dequantized = mte::DequantizeTensor(quantized);
+        float max_dequant_error = 0.0F;
+        for (std::size_t i = 0; i < quantize_input.size(); ++i) {
+            max_dequant_error =
+                std::max(max_dequant_error, std::fabs(quantize_input.data()[i] - dequantized.data()[i]));
+        }
+        Expect(max_dequant_error < 0.02F, "quantize/dequantize error too high");
+
+        std::vector<float> int8_lhs_values;
+        int8_lhs_values.reserve(32 * 64);
+        for (std::size_t i = 0; i < 32 * 64; ++i) {
+            int8_lhs_values.push_back(std::sin(static_cast<float>(i) * 0.013F) * 0.5F);
+        }
+        std::vector<float> int8_rhs_values;
+        int8_rhs_values.reserve(64 * 32);
+        for (std::size_t i = 0; i < 64 * 32; ++i) {
+            int8_rhs_values.push_back(std::cos(static_cast<float>(i) * 0.017F) * 0.5F);
+        }
+
+        const mte::Tensor int8_lhs({32, 64}, std::move(int8_lhs_values));
+        const mte::Tensor int8_rhs({64, 32}, std::move(int8_rhs_values));
+        const mte::Tensor float_matmul =
+            mte::MatMul(int8_lhs, int8_rhs, mte::MatMulBackend::kTransposeRhs);
+        const mte::Tensor int8_matmul = mte::MatMulInt8Dequantized(
+            mte::QuantizeSymmetric(int8_lhs),
+            mte::QuantizeSymmetric(mte::Transpose(int8_rhs)));
+        float max_matmul_error = 0.0F;
+        for (std::size_t i = 0; i < float_matmul.size(); ++i) {
+            max_matmul_error =
+                std::max(max_matmul_error, std::fabs(float_matmul.data()[i] - int8_matmul.data()[i]));
+        }
+        Expect(max_matmul_error < 0.5F, "int8 matmul error too high");
 
         std::cout << "All tests passed.\n";
         return 0;
