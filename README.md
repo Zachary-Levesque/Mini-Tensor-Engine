@@ -2,7 +2,7 @@
 
 Mini Tensor Engine is a C++ inference runtime for studying how tensor layout, matrix multiplication kernels, SIMD, cache locality, threading, and int8 quantization change CPU inference latency.
 
-## Why this exists
+## Why?
 
 An inference engine moves input tensors and learned weights through matrix kernels, bias addition, activation functions, and model-level dispatch. At the CPU level, the hard part is not writing `C = A * B`; it is choosing memory layouts, avoiding strided cache-line fetches, preserving numerical correctness, and proving changes with measurements. PyTorch hides those details by design, while this project keeps them visible in C++.
 
